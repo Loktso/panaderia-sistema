@@ -1,0 +1,36 @@
+# =========================================================
+# Sistema de Gestión de Ventas - Panadería
+# Dependencias multiplataforma (Windows / macOS / Ubuntu)
+# =========================================================
+# NOTA: tkinter NO va aquí porque es parte de la librería
+# estándar de Python, pero requiere el paquete del SISTEMA
+# OPERATIVO instalado por separado (ver docs/instalacion.md):
+#   - Ubuntu/Debian: sudo apt install python3-tk
+#   - Windows: viene incluido con el instalador oficial de Python
+#   - macOS: viene incluido con python.org (con Homebrew a veces
+#            requiere: brew install python-tk)
+
+# --- Base de datos ---
+mysql-connector-python==9.1.0
+
+# --- Seguridad ---
+bcrypt==4.2.1
+
+# --- Autenticación OAuth ---
+google-auth-oauthlib==1.2.1
+google-auth==2.36.0
+requests==2.32.3          # usado también para Facebook Graph API
+
+# --- Gráficas embebidas en Tkinter ---
+matplotlib==3.11.1
+
+# --- Reportes ---
+reportlab==4.2.5          # exportación a PDF
+openpyxl==3.1.5           # exportación a Excel
+
+# --- Modo offline (BD local de respaldo) ---
+# sqlite3 es parte de la librería estándar de Python, no requiere instalación
+
+# --- Utilidades de desarrollo/testing ---
+python-dotenv==1.0.1       # manejo de variables de entorno (.env) para credenciales
+pytest==8.3.4

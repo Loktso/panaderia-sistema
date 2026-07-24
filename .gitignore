@@ -1,0 +1,30 @@
+# Entornos virtuales
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Variables de entorno / credenciales (NUNCA subir esto)
+.env
+config_local.py
+
+# Base de datos local (modo offline)
+offline/*.db
+offline/*.sqlite3
+
+# Logs
+*.log
+
+# Archivos generados (reportes exportados)
+reportes_generados/
+*.pdf
+*.xlsx
+!docs/*.pdf
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
