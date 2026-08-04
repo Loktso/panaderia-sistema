@@ -20,7 +20,7 @@ def EPconectar():
     return EPconexion
 
 #esta funcion convierte una contrasena normal en un codigo encriptado ( se conoce como hash)
-#esto es lo que se guarda en la base de datos, nunca la contrasena real pues por seguridaa
+#esto es lo que se guarda en la base de datos, nunca la contrasena real pues por seguridaa 
 def EPhashearPassword(EPpasswordPlano):
     EPsalt = bcrypt.gensalt()
     EPhash = bcrypt.hashpw(EPpasswordPlano.encode("utf-8"), EPsalt)
