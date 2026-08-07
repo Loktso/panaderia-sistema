@@ -1,3 +1,6 @@
+#importamos el modulo matematico central, para no repetir la formula de descuentos aqui
+import calculadora_porcentajes as cp
+
 #esta es la clase principal de usuario pq todas las demas clases de usuario nacen de esta
 #esto se llama herencia que es una rama de POO y sirve para no repetir el mismo codigo varias veces
 class EPUsuario:
@@ -153,10 +156,7 @@ class EPVenta:
     #los dos descuentos no se suman entre si sino se aplican uno detras del otro
     #por ejemplo 10% y 5% de descuento no dan 15%, dan un poco menos que eso
     def EPcalcularTotalConDescuentosSucesivos(self):
-        EPsubtotal = self.EPcantidad * self.EPprecioUnitario
-        EPconPrimerDescuento = EPsubtotal * (1 - self.EPdescuento1 / 100)
-        EPconSegundoDescuento = EPconPrimerDescuento * (1 - self.EPdescuento2 / 100)
-        return round(EPconSegundoDescuento, 2)
+        return cp.EPcalcularTotalConDescuentos(self.EPcantidad, self.EPprecioUnitario, self.EPdescuento1, self.EPdescuento2)
 
     @classmethod
     def EPdesdeDiccionario(cls, EPdatos):

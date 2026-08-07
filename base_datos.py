@@ -4,6 +4,8 @@ import mysql.connector
 import bcrypt
 #traemos la configuracion que armamos en config.py
 from config import Config
+#traemos el modulo matematico central para no repetir formulas de porcentaje aqui
+import calculadora_porcentajes as cp
 
 #esta funcion abre una conexion nueva con la base de datos
 #osa que a esta la vamos a llamar cada vez que necesitemos hablar con mysql
@@ -214,8 +216,8 @@ def EPactualizarPrecioProducto(EPidProducto, EPnuevoPrecio):
     if EPproducto is None:
         return None
     EPprecioAnterior = float(EPproducto["precio_actual"])
-    #formula del porcentaje de cambio: precio nuevo-precio anterior/precio anterior*100
-    EPporcentajeCambio = ((EPnuevoPrecio - EPprecioAnterior) / EPprecioAnterior) * 100
+    #usamos el modulo centralizado en vez de calcular la formula aqui directo
+    EPporcentajeCambio = cp.EPcalcularPorcentajeCambio(EPprecioAnterior, EPnuevoPrecio)
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor()
     #actualizamos el precio actual del producto
