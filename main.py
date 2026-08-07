@@ -1,38 +1,17 @@
 import tkinter as tk
 
-from ventanas.login import EPiniciarVentanaLogin
-from ventanas.panel_admin import EPPanelUsuarios
-
-import modelos as md
+from ventanas.panel_invitado import EPPanelInvitado
 
 
 #esta es la funcion principal, la que arranca todo el programa
+#ahora ya NO abre el login primero: abre directo la vitrina (panel_invitado),
+#cualquiera puede entrar a ver el catalogo sin loguearse. el login solo
+#aparece cuando hace falta de verdad (icono de perfil o boton de comprar),
+#eso ya esta resuelto adentro de EPPanelInvitado
 def EPmain():
-
-    #primero mostramos el login y esperamos a que el usuario haga algo
-    EPusuario = EPiniciarVentanaLogin()
-
-    #si cerro la ventana sin iniciar sesion, no hacemos nada mas
-    if EPusuario is None:
-        print("No se inicio sesion, cerrando el programa")
-        return
-
-    #si es administrador, le abrimos el panel de gestion de usuarios
-    if isinstance(EPusuario, md.EPAdministrador):
-        EPraiz = tk.Tk()
-        EPPanelUsuarios(EPraiz)
-        EPraiz.mainloop()
-
-    #si es vendedor, por ahora solo avisamos, ese panel todavia no esta hecho
-    elif isinstance(EPusuario, md.EPVendedor):
-        print(f"Bienvenido vendedor: {EPusuario.EPnombre}")
-        print("El panel de vendedor todavia no esta programado")
-
-    #si es invitado, tambien avisamos, ese panel todavia no esta hecho
-    elif isinstance(EPusuario, md.EPInvitado):
-        print("Entraste como invitado")
-        print("El catalogo de invitado todavia no esta programado")
-
+    EPraiz = tk.Tk()
+    EPPanelInvitado(EPraiz)
+    EPraiz.mainloop()
 
 #esto hace que el programa arranque solo cuando corres este archivo directamente
 if __name__ == "__main__":
