@@ -5,6 +5,7 @@
 import sys
 import os
 import unicodedata
+import datetime
 import tkinter as tk
 from tkinter import messagebox
 
@@ -13,6 +14,7 @@ from tkinter import messagebox
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import modelos as md
+import calculadora_porcentajes as cp
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_NEUTRO,
@@ -181,6 +183,13 @@ class EPPanelInvitado:
         self._EPtimerRedimension = None
         self._EPanchoAnterior = 0
 
+        #cada 30 segundos volvemos a preguntarle a la base de datos por los
+        #productos, asi si el administrador agrega uno nuevo, aparece solo sin
+        #que el cliente tenga que cerrar y volver a abrir la vitrina
+        self._EPactivoRefresco = True
+        self._EPintervaloRefresco = 30000
+        self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
+
         def _EPalRedimensionar(EPevento):
             EPanchoActual = self.EPraiz.winfo_width()
             if EPanchoActual == self._EPanchoAnterior:
@@ -190,6 +199,14 @@ class EPPanelInvitado:
                 self.EPraiz.after_cancel(self._EPtimerRedimension)
             self._EPtimerRedimension = self.EPraiz.after(300, self.EPcargarProductos)
         self.EPraiz.bind("<Configure>", _EPalRedimensionar)
+
+    #esta funcion se vuelve a llamar a si misma cada 30 segundos, mientras la
+    #ventana siga abierta (_EPactivoRefresco se pone en False al cerrar)
+    def _EPrefrescarCatalogoAutomatico(self):
+        if not self._EPactivoRefresco:
+            return
+        self.EPcargarProductos()
+        self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
 
     # ---------- datos de productos ----------
 
@@ -245,11 +262,12 @@ class EPPanelInvitado:
 
     def EPagregarAlCarrito(self, EPproducto):
         for EPitem in self.EPcarrito:
-            if EPitem["nombre"] == EPproducto["nombre"]:
+            if EPitem["id_producto"] == EPproducto["id_producto"]:
                 EPitem["cantidad"] += 1
                 break
         else:
             self.EPcarrito.append({
+                "id_producto": EPproducto["id_producto"],
                 "nombre": EPproducto["nombre"],
                 "precio": float(EPproducto["precio_actual"]),
                 "cantidad": 1,
@@ -298,18 +316,52 @@ class EPPanelInvitado:
         if not self.EPcarrito:
             messagebox.showwarning("Carrito vacio", "Agrega al menos un producto antes de continuar")
             return
+
         if isinstance(self.EPusuario, md.EPInvitado):
             self.EPabrirLogin()
             if isinstance(self.EPusuario, md.EPInvitado):
                 return  # cerro el login sin loguearse, no seguimos con la compra
+
+        if bd is None:
+            messagebox.showerror("Sin conexion", "No se puede procesar la compra sin conexion a la base de datos")
+            return
+
+        EPhoy = datetime.date.today()
+
+        #primero revisamos TODOS los productos antes de vender cualquiera
+        #si uno solo no tiene suficiente disponible, no se vende nada del carrito
+        EPfaltantes = []
+        for EPitem in self.EPcarrito:
+            EPdisponible = bd.EPobtenerDisponibleHoy(EPitem["id_producto"], EPhoy)
+            if EPdisponible is None or EPdisponible < EPitem["cantidad"]:
+                EPfaltantes.append(EPitem["nombre"])
+
+        if EPfaltantes:
+            messagebox.showerror(
+                "No disponible hoy",
+                "Estos productos no tienen suficiente disponible hoy:\n" + "\n".join(EPfaltantes)
+            )
+            return
+
+        #ya validado todo, registramos cada venta y descontamos de la produccion del dia
+        EPtotalCompra = 0
+        for EPitem in self.EPcarrito:
+            EPtotalItem = cp.EPcalcularTotalConDescuentos(EPitem["cantidad"], EPitem["precio"], 0, 0)
+            bd.EPregistrarVenta(
+                EPitem["id_producto"], self.EPusuario.EPidUsuario, EPitem["cantidad"],
+                EPitem["precio"], 0, 0, EPtotalItem
+            )
+            bd.EPactualizarVentaProduccion(EPitem["id_producto"], EPhoy, EPitem["cantidad"])
+            EPtotalCompra += EPtotalItem
+
         EPventanaCarrito.destroy()
         messagebox.showinfo(
-            "Resumen de compra",
-            f"Compra confirmada para {getattr(self.EPusuario, 'EPnombre', 'cliente')}."
-            f"\n(el registro real en la base de datos y la factura se conectan en el siguiente paso)"
+            "Compra confirmada",
+            f"Compra registrada para {getattr(self.EPusuario, 'EPnombre', 'cliente')}.\nTotal: ${EPtotalCompra:.2f}"
         )
         self.EPcarrito.clear()
         self.EPbotonCarrito.EPactualizarBadge(0)
+        self.EPcargarProductos()
 
     # ---------- login / cuenta ----------
 
@@ -350,6 +402,7 @@ class EPPanelInvitado:
 
     def EPalCerrarVentana(self):
         self.EPcarrusel.EPdetener()
+        self._EPactivoRefresco = False
         self.EPraiz.destroy()
 
 

@@ -321,6 +321,25 @@ def EPobtenerProduccionPorFecha(EPfecha):
     EPconexion.close()
     return EPresultado
 
+#revisa cuanto queda disponible hoy de un producto (lo producido menos lo ya vendido)
+#si no hay registro de produccion para hoy, devuelve None (o sea no se sabe cuanto hay,
+#asi que no se debe permitir la venta)
+def EPobtenerDisponibleHoy(EPidProducto, EPfecha):
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor(dictionary=True)
+    EPcursor.execute(
+        "SELECT cantidad_producida, cantidad_vendida FROM produccion_diaria WHERE id_producto = %s AND fecha = %s",
+        (EPidProducto, EPfecha)
+    )
+    EPregistro = EPcursor.fetchone()
+    EPcursor.close()
+    EPconexion.close()
+
+    if EPregistro is None:
+        return None
+
+    return EPregistro["cantidad_producida"] - EPregistro["cantidad_vendida"]
+
 #registra una venta nueva en la base de datos
 def EPregistrarVenta(EPidProducto, EPidUsuario, EPcantidad, EPprecioUnitario, EPdescuento1, EPdescuento2, EPtotal):
     EPconexion = EPconectar()
