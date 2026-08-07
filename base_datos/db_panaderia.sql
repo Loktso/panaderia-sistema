@@ -14,8 +14,9 @@ USE panaderia_db;
 
 -- =========================================================
 -- TABLA: usuarios
--- Guarda administradores y vendedores. Los "invitados" NO
--- necesitan cuenta, así que no se guardan aquí (acceden sin login).
+-- Guarda administradores, vendedores y clientes registrados. Los
+-- "invitados" NO necesitan cuenta, así que no se guardan aquí
+-- (acceden sin login, solo pueden ver el catalogo).
 -- =========================================================
 CREATE TABLE usuarios (
     id_usuario          INT AUTO_INCREMENT PRIMARY KEY,
@@ -24,7 +25,7 @@ CREATE TABLE usuarios (
     password_hash       VARCHAR(255)    NULL,
     telefono            VARCHAR(20)     NULL,
     direccion           VARCHAR(255)    NULL,
-    rol                 ENUM('administrador', 'vendedor') NOT NULL DEFAULT 'vendedor',
+    rol                 ENUM('administrador', 'vendedor', 'cliente') NOT NULL DEFAULT 'vendedor',
     proveedor_login     ENUM('local', 'google', 'facebook') NOT NULL DEFAULT 'local',
     activo              TINYINT(1)      NOT NULL DEFAULT 1,
     fecha_registro      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,

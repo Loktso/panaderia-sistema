@@ -64,6 +64,13 @@ class EPVendedor(EPUsuario):
     def EPpuedeRegistrarVenta(self):
         return True
 
+#el cliente hereda de EPUsuario, a diferencia de vendedor y administrador
+#el cliente no tiene ningun permiso de gestion, solo puede comprar en la vitrina
+#esto es distinto de EPInvitado: el cliente si tiene cuenta guardada en la base de datos
+class EPCliente(EPUsuario):
+    def EPpuedeComprar(self):
+        return True
+
 #esta clase es distinta, no hereda de EPUsuario porque el invitado no tiene cuenta guardada
 #solo sirve para ver el catalogo, no puede comprar ni iniciar sesion con datos reales
 class EPInvitado:
@@ -76,11 +83,14 @@ class EPInvitado:
         return False
 
 #esta funcion mira el campo rol que viene de la base de datos
-#y decide si crear un administrador o un vendedor asi no lo tenemos que decidir a mano cada vez
+#y decide que clase crear (administrador, vendedor o cliente) asi no lo tenemos
+#que decidir a mano cada vez que leemos un usuario
 def EPcrearUsuarioDesdeRol(EPdatos):
     if EPdatos["rol"] == "administrador":
         return EPAdministrador.EPdesdeDiccionario(EPdatos)
-    return EPVendedor.EPdesdeDiccionario(EPdatos)
+    if EPdatos["rol"] == "vendedor":
+        return EPVendedor.EPdesdeDiccionario(EPdatos)
+    return EPCliente.EPdesdeDiccionario(EPdatos)
 
 #esta clase representa un producto del catalogo como pan o croissant
 class EPProducto:
