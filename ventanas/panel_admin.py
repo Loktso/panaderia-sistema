@@ -9,16 +9,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import base_datos as bd
 
-
-#paleta de colores del sistema, tema panaderia onos cafe y crema
-EPCOLOR_FONDO = "#FDF6EC"
-EPCOLOR_HEADER = "#8B5E3C"
-EPCOLOR_TARJETA = "#FFFFFF"
-EPCOLOR_TEXTO = "#4A3728"
-EPCOLOR_BOTON_PRIMARIO = "#C97B3D"
-EPCOLOR_BOTON_EXITO = "#7A9463"
-EPCOLOR_BOTON_PELIGRO = "#C1443B"
-EPCOLOR_BOTON_NEUTRO = "#B0A18F"
+#los colores ya no se repiten aqui, se traen todos de estilos.py
+#asi si cambiamos un color, cambia en todo el sistema a la vez
+from estilos import (
+    EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
+    EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_PELIGRO, EPCOLOR_BOTON_NEUTRO,
+)
 
 #esta clase dibuja un boton con las esquinas redondeadas usando un canvas
 #tkinter no trae botones redondos por defecto, asi que lo armamos a mano
