@@ -2,6 +2,7 @@
 #asi cualquier ventana nueva (vitrina, catalogo, etc) usa siempre los mismos colores
 #que ya definimos en panel_admin.py, y no se desordena el diseno
 import os
+import unicodedata
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 #paleta de colores del sistema, tema panaderia tonos cafe y crema
@@ -73,3 +74,13 @@ def EPcargarImagenTk(EPruta, EPancho, EPalto, EPtextoPlaceholder="", EPcolorPlac
 #arma la ruta completa a un archivo dentro de assets, ej: EPrutaAsset("iconos", "icono_carrito.png")
 def EPrutaAsset(*EPpartes):
     return os.path.join(EPRUTA_ASSETS, *EPpartes)
+
+
+#convierte "Pastel de Chocolate" en "pastel_de_chocolate", para poder buscar
+#la imagen del producto sin importar tildes o mayusculas. esta se usa tanto
+#en la vitrina (para mostrar la foto) como en el panel de productos del
+#administrador (para guardar la foto con el nombre correcto)
+def EPslugify(EPtexto):
+    EPtexto = unicodedata.normalize("NFKD", EPtexto).encode("ascii", "ignore").decode("ascii")
+    EPtexto = EPtexto.lower().strip().replace(" ", "_")
+    return "".join(EPcaracter for EPcaracter in EPtexto if EPcaracter.isalnum() or EPcaracter == "_")

@@ -49,15 +49,15 @@ class EPUsuario:
         )
 
 #esta clase hereda de EPUsuario o sea que tiene todo lo de arriba mas lo que agreguemos aqui
-#un administrador puede hacer todo por eso todos los permisos quedan en true
+#un administrador puede gestionar todo, pero NO registra ventas el mismo:
+#eso lo hace el vendedor. si el dueño necesita vender, entra con su propia
+#cuenta de vendedor en vez de mezclar los dos roles en una sola sesion
 class EPAdministrador(EPUsuario):
     def EPpuedeGestionarUsuarios(self):
         return True
     def EPpuedeGestionarInventario(self):
         return True
     def EPpuedeVerReportesFinancieros(self):
-        return True
-    def EPpuedeRegistrarVenta(self):
         return True
 
 #el vendedor tambien hereda de EPUsuario, pero solo puede registrar ventas

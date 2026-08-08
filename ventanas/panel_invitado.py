@@ -4,7 +4,6 @@
 #(el icono de perfil, o el boton de continuar compra dentro del carrito)
 import sys
 import os
-import unicodedata
 import datetime
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -18,11 +17,11 @@ import calculadora_porcentajes as cp
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_NEUTRO,
-    EPcargarImagenTk, EPrutaAsset,
+    EPcargarImagenTk, EPrutaAsset, EPslugify,
 )
 from ventanas.componentes_ui import EPBotonImagen, EPCarruselSuave
 from ventanas.login import EPVentanaLogin
-from ventanas.panel_admin import EPBotonRedondeado, EPPanelUsuarios
+from ventanas.panel_admin import EPBotonRedondeado, EPPanelAdmin, EPobtenerFotosProducto
 from ventanas.panel_vendedor import EPPanelVendedor
 
 #intentamos importar base_datos, pero si algo falla (por ejemplo todavia no
@@ -53,10 +52,7 @@ EPARCHIVOS_CARRUSEL = [f"carrusel_{EPn}.jpg" for EPn in range(1, 7)]
 
 #convierte "Pastel de Chocolate" en "pastel_de_chocolate", para poder buscar
 #la imagen del producto sin importar tildes o mayusculas
-def EPslugify(EPtexto):
-    EPtexto = unicodedata.normalize("NFKD", EPtexto).encode("ascii", "ignore").decode("ascii")
-    EPtexto = EPtexto.lower().strip().replace(" ", "_")
-    return "".join(EPcaracter for EPcaracter in EPtexto if EPcaracter.isalnum() or EPcaracter == "_")
+#(EPslugify ahora vive en estilos.py, para compartirla con panel_admin.py)
 
 
 class EPPanelInvitado:
@@ -72,6 +68,16 @@ class EPPanelInvitado:
         self.EPusuario = md.EPInvitado()
         self.EPcarrito = []  # cada item: {"nombre":.., "precio":.., "cantidad":..}
 
+        #banderas del auto-refresco del catalogo, inicializadas antes de
+        #construir la interfaz porque EPlimpiarVista ya las necesita desde
+        #la primera vez que se dibuja la vista de catalogo
+        self._EPactivoRefresco = False
+        self._EPtimerRedimension = None
+        self._EPanchoAnterior = 0
+        self._EPintervaloRefresco = 30000
+        self._EPvistaActual = None
+        self.EPimagenesProductosTk = []  # referencias para que las fotos no desaparezcan
+
         self.EPconstruirInterfaz()
         self.EPraiz.protocol("WM_DELETE_WINDOW", self.EPalCerrarVentana)
 
@@ -79,8 +85,13 @@ class EPPanelInvitado:
 
     def EPconstruirInterfaz(self):
         self.EPconstruirHeader()
-        self.EPconstruirCarrusel()
-        self.EPconstruirCatalogo()
+        #contenedor debajo del header: aqui se dibuja SIEMPRE la seccion
+        #activa (catalogo, promociones, o la tarjeta de detalle de un
+        #producto). igual que en panel_admin.py, nunca se abren ventanas
+        #nuevas, solo se destruye y se vuelve a armar lo que hay aqui adentro
+        self.EPcontenedorVista = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
+        self.EPcontenedorVista.pack(fill="both", expand=True)
+        self.EPmostrarCatalogo()
 
     def EPconstruirHeader(self):
         EPheader = tk.Frame(self.EPraiz, bg=EPCOLOR_HEADER, height=95)
@@ -134,15 +145,38 @@ class EPPanelInvitado:
         )
         self.EPetiquetaUsuario.grid(row=1, column=4)
 
+    #borra todo lo que haya dibujado la seccion anterior (catalogo,
+    #promociones o la tarjeta de detalle), para dejar el area debajo del
+    #header lista para dibujar la siguiente seccion. tambien apaga el
+    #carrusel si estaba corriendo, para que no siga programando pasos de
+    #fade sobre un widget que se esta a punto de destruir
+    def EPlimpiarVista(self):
+        if hasattr(self, "EPcarrusel"):
+            self.EPcarrusel.EPdetener()
+        self._EPactivoRefresco = False
+        if self._EPtimerRedimension:
+            self.EPraiz.after_cancel(self._EPtimerRedimension)
+            self._EPtimerRedimension = None
+        for EPwidget in self.EPcontenedorVista.winfo_children():
+            EPwidget.destroy()
+
+    #seccion: catalogo completo (carrusel de fotos grandes arriba + la
+    #cuadricula de productos abajo). es la vista con la que arranca la app
+    def EPmostrarCatalogo(self):
+        self.EPlimpiarVista()
+        self._EPvistaActual = "catalogo"
+        self.EPconstruirCarrusel()
+        self.EPconstruirCatalogo()
+
     def EPconstruirCarrusel(self):
-        EPcontenedor = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
+        EPcontenedor = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
         EPcontenedor.pack(fill="x", pady=15)
         EPrutasCarrusel = [EPrutaAsset("carrusel", EParchivo) for EParchivo in EPARCHIVOS_CARRUSEL]
         self.EPcarrusel = EPCarruselSuave(EPcontenedor, EPrutasCarrusel, EPancho=1120, EPalto=320)
         self.EPcarrusel.pack()
 
     def EPconstruirCatalogo(self):
-        self.EPmarcoCatalogo = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
+        self.EPmarcoCatalogo = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
         self.EPmarcoCatalogo.pack(fill="both", expand=True, padx=40, pady=(0, 15))
 
         tk.Label(
@@ -179,18 +213,11 @@ class EPPanelInvitado:
         EPcanvas.bind("<Enter>", EPactivarScroll)
         EPcanvas.bind("<Leave>", EPdesactivarScroll)
 
-        self.EPimagenesProductosTk = []  # referencias para que las fotos no desaparezcan
-        #_EPactivoRefresco se define ANTES de programar cualquier after(), para
-        #que hasta la primera carga pase por el mismo chequeo de seguridad
+        self.EPimagenesProductosTk = []
+        #_EPactivoRefresco se reactiva aqui porque EPlimpiarVista lo apaga
+        #cada vez que se sale de esta seccion (a promociones o al detalle)
         self._EPactivoRefresco = True
         self.EPraiz.after(100, self.EPcargarProductosSiActivo)
-        self._EPtimerRedimension = None
-        self._EPanchoAnterior = 0
-
-        #cada 30 segundos volvemos a preguntarle a la base de datos por los
-        #productos, asi si el administrador agrega uno nuevo, aparece solo sin
-        #que el cliente tenga que cerrar y volver a abrir la vitrina
-        self._EPintervaloRefresco = 30000
         self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
 
         def _EPalRedimensionar(EPevento):
@@ -223,6 +250,8 @@ class EPPanelInvitado:
             return
         if not self.EPraiz.winfo_exists():
             return
+        if not hasattr(self, "EPframeTarjetas") or not self.EPframeTarjetas.winfo_exists():
+            return
         self.EPcargarProductos()
 
     # ---------- datos de productos ----------
@@ -249,17 +278,26 @@ class EPPanelInvitado:
         EPcolumnas = max(1, EPanchoDisponible // 260)
         for EPindice, EPproducto in enumerate(EPproductos):
             EPfila, EPcolumna = divmod(EPindice, EPcolumnas)
-            self.EPcrearTarjetaProducto(EPproducto, EPfila, EPcolumna)
+            self.EPcrearTarjetaProductoEn(self.EPframeTarjetas, EPproducto, EPfila, EPcolumna)
 
-    def EPcrearTarjetaProducto(self, EPproducto, EPfila, EPcolumna):
-        EPtarjeta = tk.Frame(self.EPframeTarjetas, bg=EPCOLOR_TARJETA, padx=12, pady=12)
+    #tarjeta chica de producto (foto + nombre + precio + boton Agregar), la
+    #misma que usan tanto el catalogo como promociones. EPpadre es el frame
+    #donde va a vivir (self.EPframeTarjetas en catalogo, otro frame en
+    #promociones), asi no se repite este codigo en dos lados
+    def EPcrearTarjetaProductoEn(self, EPpadre, EPproducto, EPfila, EPcolumna):
+        EPtarjeta = tk.Frame(EPpadre, bg=EPCOLOR_TARJETA, padx=12, pady=12)
         EPtarjeta.grid(row=EPfila, column=EPcolumna, padx=12, pady=12, sticky="n")
 
         EPnombre = EPproducto["nombre"]
         EPrutaImagen = EPrutaAsset("productos", f"{EPslugify(EPnombre)}.jpg")
         EPfotoTk = EPcargarImagenTk(EPrutaImagen, 220, 160, EPnombre)
         self.EPimagenesProductosTk.append(EPfotoTk)
-        tk.Label(EPtarjeta, image=EPfotoTk, bg=EPCOLOR_TARJETA).pack()
+        EPetiquetaFoto = tk.Label(EPtarjeta, image=EPfotoTk, bg=EPCOLOR_TARJETA, cursor="hand2")
+        EPetiquetaFoto.pack()
+        #el click en la foto abre la tarjeta de detalle; el boton "Agregar"
+        #de aqui abajo NO se toca, sigue agregando directo al carrito igual
+        #que siempre, sin pasar por la tarjeta de detalle
+        EPetiquetaFoto.bind("<Button-1>", lambda EPevento: self.EPmostrarDetalleProducto(EPproducto))
 
         tk.Label(
             EPtarjeta, text=EPnombre, bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
@@ -447,16 +485,18 @@ class EPPanelInvitado:
         self.EPetiquetaUsuario.config(text=EPnombre)
 
         if isinstance(self.EPusuario, md.EPAdministrador):
-            self.EPcarrusel.EPdetener()
+            if hasattr(self, "EPcarrusel"):
+                self.EPcarrusel.EPdetener()
             self._EPactivoRefresco = False
             if self._EPtimerRedimension:
                 self.EPraiz.after_cancel(self._EPtimerRedimension)
             for EPwidget in self.EPraiz.winfo_children():
                 EPwidget.destroy()
-            EPPanelUsuarios(self.EPraiz)
+            EPPanelAdmin(self.EPraiz)
 
         elif isinstance(self.EPusuario, md.EPVendedor):
-            self.EPcarrusel.EPdetener()
+            if hasattr(self, "EPcarrusel"):
+                self.EPcarrusel.EPdetener()
             self._EPactivoRefresco = False
             if self._EPtimerRedimension:
                 self.EPraiz.after_cancel(self._EPtimerRedimension)
@@ -465,20 +505,182 @@ class EPPanelInvitado:
             EPPanelVendedor(self.EPraiz, self.EPusuario)
 
     # ---------- navegacion dentro de la vitrina ----------
+    # catalogo, promociones y la tarjeta de detalle de un producto viven
+    # TODOS en la misma ventana: solo se reemplaza self.EPcontenedorVista,
+    # nunca se abre un Toplevel nuevo para esto (igual que panel_admin.py)
 
     def EPirACatalogo(self):
-        self.EPmarcoCatalogo.update_idletasks()
-        self.EPraiz.focus_set()
+        if self._EPvistaActual == "catalogo":
+            return
+        self.EPmostrarCatalogo()
 
+    #por ahora "promociones" muestra los productos cuyo ultimo cambio de
+    #precio en historial_precios fue una BAJADA (una promocion real, no
+    #inventada, calculada con el mismo modulo matematico del proyecto).
+    #si ningun producto tiene una bajada de precio reciente, se avisa en
+    #vez de dejar la seccion vacia sin explicacion
     def EPmostrarPromociones(self):
-        messagebox.showinfo("Promociones", "Todavia no hay promociones cargadas, esta seccion se arma en el siguiente paso")
+        self.EPlimpiarVista()
+        self._EPvistaActual = "promociones"
+
+        tk.Label(
+            self.EPcontenedorVista, text="Promociones", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
+            font=("Arial", 16, "bold")
+        ).pack(anchor="w", padx=40, pady=(20, 5))
+
+        EPproductosEnPromo = self.EPobtenerProductosEnPromocion()
+        if not EPproductosEnPromo:
+            tk.Label(
+                self.EPcontenedorVista,
+                text="Por ahora no hay productos con una bajada de precio reciente.",
+                bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO, font=("Arial", 11)
+            ).pack(anchor="w", padx=40, pady=10)
+            return
+
+        EPmarco = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
+        EPmarco.pack(fill="both", expand=True, padx=40, pady=(0, 15))
+        for EPindice, EPproducto in enumerate(EPproductosEnPromo):
+            EPfila, EPcolumna = divmod(EPindice, 4)
+            self.EPcrearTarjetaProductoEn(EPmarco, EPproducto, EPfila, EPcolumna)
+
+    #revisa, producto por producto, si su ultimo cambio de precio registrado
+    #en historial_precios fue negativo (bajo de precio). usa el mismo bd que
+    #ya tenias, no crea tablas nuevas ni datos falsos
+    def EPobtenerProductosEnPromocion(self):
+        if bd is None:
+            return []
+        EPenPromo = []
+        try:
+            for EPproducto in bd.EPobtenerProductos():
+                EPhistorial = bd.EPobtenerHistorialPrecios(EPproducto["id_producto"])
+                if EPhistorial and float(EPhistorial[-1]["porcentaje_cambio"]) < 0:
+                    EPenPromo.append(EPproducto)
+        except Exception:
+            return []
+        return EPenPromo
+
+    #tarjeta de detalle: foto grande con carrusel en bucle (si hay mas de
+    #una foto), nombre, descripcion, precio, boton de agregar al carrito
+    #(la misma logica que usa la tarjeta chica del catalogo) y un boton de
+    #regresar que vuelve a la vista de donde vino el cliente (catalogo o
+    #promociones), sin cerrar la ventana principal en ningun momento
+    def EPmostrarDetalleProducto(self, EPproducto):
+        EPvistaDeOrigen = self._EPvistaActual
+        self.EPlimpiarVista()
+        self._EPvistaActual = "detalle"
+        #se guarda en self, no en una variable local: si nadie la referencia
+        #despues de este metodo, Python podria recolectar el objeto (y con
+        #el, la imagen de la foto que tiene cargada) aunque el widget siga
+        #visible en pantalla
+        self.EPtarjetaDetalleActual = EPTarjetaDetalleProducto(
+            self.EPcontenedorVista, EPproducto, self.EPagregarAlCarrito,
+            EPalRegresar=lambda: (
+                self.EPmostrarCatalogo() if EPvistaDeOrigen != "promociones" else self.EPmostrarPromociones()
+            )
+        )
 
     def EPalCerrarVentana(self):
-        self.EPcarrusel.EPdetener()
+        if hasattr(self, "EPcarrusel"):
+            self.EPcarrusel.EPdetener()
         self._EPactivoRefresco = False
         if self._EPtimerRedimension:
             self.EPraiz.after_cancel(self._EPtimerRedimension)
         self.EPraiz.destroy()
+
+
+#tarjeta de detalle de UN producto, dibujada dentro del contenedor de vista
+#de la vitrina (nunca en una ventana Toplevel aparte). muestra:
+#- carrusel de fotos EN BUCLE (si hay mas de una foto, aparecen flechas
+#  "<" y ">"; si solo hay una o ninguna, no aparecen flechas)
+#- nombre, descripcion y precio
+#- boton "Agregar al carrito" (llama a la MISMA funcion que ya usa la
+#  tarjeta chica del catalogo, no es una copia)
+#- boton "Regresar" que solo cierra esta tarjeta, no la ventana
+class EPTarjetaDetalleProducto:
+
+    def __init__(self, EPcontenedor, EPproducto, EPalAgregarCarrito, EPalRegresar):
+        self.EPcontenedor = EPcontenedor
+        self.EPproducto = EPproducto
+        self.EPalAgregarCarrito = EPalAgregarCarrito
+        self.EPalRegresar = EPalRegresar
+
+        self.EPfotos = EPobtenerFotosProducto(EPproducto["nombre"])
+        if not self.EPfotos:
+            #si el producto no tiene ninguna foto en assets/productos, igual
+            #mostramos un placeholder en vez de dejar la tarjeta sin imagen
+            self.EPfotos = [None]
+        self.EPindiceFoto = 0
+        self.EPfotoActualTk = None
+
+        self.EPconstruir()
+
+    def EPconstruir(self):
+        EPBotonRedondeado(
+            self.EPcontenedor, "< Regresar", self.EPalRegresar,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=140, EPalto=34
+        ).pack(anchor="w", padx=30, pady=(20, 10))
+
+        EPtarjeta = tk.Frame(self.EPcontenedor, bg=EPCOLOR_TARJETA, padx=30, pady=25)
+        EPtarjeta.pack(padx=40, pady=(0, 20))
+
+        #fila del carrusel: flecha izquierda, foto grande, flecha derecha
+        EPfilaFoto = tk.Frame(EPtarjeta, bg=EPCOLOR_TARJETA)
+        EPfilaFoto.pack()
+
+        EPmostrarFlechas = len(self.EPfotos) > 1
+
+        if EPmostrarFlechas:
+            EPBotonRedondeado(
+                EPfilaFoto, "<", self.EPfotoAnterior,
+                EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=44, EPalto=44, EPradio=22
+            ).pack(side="left", padx=(0, 12))
+
+        self.EPlabelFoto = tk.Label(EPfilaFoto, bg=EPCOLOR_TARJETA)
+        self.EPlabelFoto.pack(side="left")
+
+        if EPmostrarFlechas:
+            EPBotonRedondeado(
+                EPfilaFoto, ">", self.EPfotoSiguiente,
+                EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=44, EPalto=44, EPradio=22
+            ).pack(side="left", padx=(12, 0))
+
+        self.EPactualizarFoto()
+
+        tk.Label(
+            EPtarjeta, text=self.EPproducto["nombre"], bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            font=("Arial", 18, "bold"), wraplength=500
+        ).pack(pady=(18, 6))
+
+        EPdescripcion = self.EPproducto.get("descripcion") or "Este producto todavia no tiene descripcion."
+        tk.Label(
+            EPtarjeta, text=EPdescripcion, bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            font=("Arial", 10), wraplength=500, justify="left"
+        ).pack(pady=(0, 10))
+
+        tk.Label(
+            EPtarjeta, text=f"${float(self.EPproducto['precio_actual']):.2f}", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_BOTON_PRIMARIO, font=("Arial", 16, "bold")
+        ).pack(pady=(0, 15))
+
+        EPBotonRedondeado(
+            EPtarjeta, "Agregar al carrito", lambda: self.EPalAgregarCarrito(self.EPproducto),
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=240, EPalto=42
+        ).pack()
+
+    #las fotos van EN BUCLE: despues de la ultima vuelve a la primera, y
+    #antes de la primera va a la ultima, nunca se traba en ningun extremo
+    def EPfotoAnterior(self):
+        self.EPindiceFoto = (self.EPindiceFoto - 1) % len(self.EPfotos)
+        self.EPactualizarFoto()
+
+    def EPfotoSiguiente(self):
+        self.EPindiceFoto = (self.EPindiceFoto + 1) % len(self.EPfotos)
+        self.EPactualizarFoto()
+
+    def EPactualizarFoto(self):
+        EPruta = self.EPfotos[self.EPindiceFoto]
+        self.EPfotoActualTk = EPcargarImagenTk(EPruta, 420, 300, self.EPproducto["nombre"])
+        self.EPlabelFoto.config(image=self.EPfotoActualTk)
 
 
 #ventana de perfil del cliente: foto, datos personales (nombre, correo,

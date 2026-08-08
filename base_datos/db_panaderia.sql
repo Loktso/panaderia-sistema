@@ -42,6 +42,7 @@ CREATE TABLE productos (
     id_producto     INT AUTO_INCREMENT PRIMARY KEY,
     nombre          VARCHAR(100)    NOT NULL,
     categoria       VARCHAR(50)     NOT NULL DEFAULT 'general',
+    descripcion     TEXT            NULL,   -- texto corto para la tarjeta de detalle del producto
     precio_actual   DECIMAL(10,2)   NOT NULL,
     costo_unitario  DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
     activo          TINYINT(1)      NOT NULL DEFAULT 1,

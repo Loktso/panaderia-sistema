@@ -167,14 +167,14 @@ def EPdesactivarUsuario(EPidUsuario):
     return EPfilas
 
 
-def EPcrearProducto(EPnombre, EPcategoria, EPprecio, EPcosto):
+def EPcrearProducto(EPnombre, EPcategoria, EPprecio, EPcosto, EPdescripcion=None):
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor()
     EPquery = """
-        INSERT INTO productos (nombre, categoria, precio_actual, costo_unitario)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO productos (nombre, categoria, descripcion, precio_actual, costo_unitario)
+        VALUES (%s, %s, %s, %s, %s)
     """
-    EPcursor.execute(EPquery, (EPnombre, EPcategoria, EPprecio, EPcosto))
+    EPcursor.execute(EPquery, (EPnombre, EPcategoria, EPdescripcion, EPprecio, EPcosto))
     EPconexion.commit()
     EPidNuevo = EPcursor.lastrowid
     EPcursor.close()
@@ -204,15 +204,15 @@ def EPobtenerProductoPorId(EPidProducto):
 
 #actualiza el nombre categoria y costo de un producto sin tocar el precio
 #el precio se cambia aparte con la funcion de abajo porque ese cambio hay que registrarlo en el historial
-def EPactualizarDatosProducto(EPidProducto, EPnombre, EPcategoria, EPcosto):
+def EPactualizarDatosProducto(EPidProducto, EPnombre, EPcategoria, EPcosto, EPdescripcion=None):
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor()
     EPquery = """
         UPDATE productos
-        SET nombre = %s, categoria = %s, costo_unitario = %s
+        SET nombre = %s, categoria = %s, costo_unitario = %s, descripcion = %s
         WHERE id_producto = %s
     """
-    EPcursor.execute(EPquery, (EPnombre, EPcategoria, EPcosto, EPidProducto))
+    EPcursor.execute(EPquery, (EPnombre, EPcategoria, EPcosto, EPdescripcion, EPidProducto))
     EPconexion.commit()
     EPfilas = EPcursor.rowcount
     EPcursor.close()
