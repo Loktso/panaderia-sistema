@@ -22,7 +22,8 @@ from estilos import (
 )
 from ventanas.componentes_ui import EPBotonImagen, EPCarruselSuave
 from ventanas.login import EPVentanaLogin
-from ventanas.panel_admin import EPBotonRedondeado
+from ventanas.panel_admin import EPBotonRedondeado, EPPanelUsuarios
+from ventanas.panel_vendedor import EPPanelVendedor
 
 #intentamos importar base_datos, pero si algo falla (por ejemplo todavia no
 #has configurado el .env o no tienes mysql corriendo) la vitrina igual debe
@@ -381,15 +382,22 @@ class EPPanelInvitado:
             self.EPusuario = EPcontrolLogin.EPusuarioAutenticado
             self.EPactualizarEstadoUsuario()
 
+    #esta funcion se llama justo despues de un login exitoso desde la vitrina
+    #si es administrador o vendedor, le abrimos su panel de verdad (como
+    #ventanita Toplevel, no como una segunda ventana principal, porque ya
+    #hay un mainloop corriendo con la vitrina). el cliente y el invitado se
+    #quedan navegando la vitrina normal, no tienen panel aparte
     def EPactualizarEstadoUsuario(self):
         EPnombre = getattr(self.EPusuario, "EPnombre", None) or "Invitado"
         self.EPetiquetaUsuario.config(text=EPnombre)
+
         if isinstance(self.EPusuario, md.EPAdministrador):
-            messagebox.showinfo(
-                "Sesion iniciada",
-                f"Bienvenido/a {EPnombre}. Entraste como administrador; "
-                f"el acceso directo al panel de administracion se conecta en el siguiente paso."
-            )
+            EPventanaPanel = tk.Toplevel(self.EPraiz)
+            EPPanelUsuarios(EPventanaPanel)
+
+        elif isinstance(self.EPusuario, md.EPVendedor):
+            EPventanaPanel = tk.Toplevel(self.EPraiz)
+            EPPanelVendedor(EPventanaPanel, self.EPusuario)
 
     # ---------- navegacion dentro de la vitrina ----------
 
