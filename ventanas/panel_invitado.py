@@ -7,7 +7,7 @@ import os
 import unicodedata
 import datetime
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 
 #esta linea busca la carpeta de panaderia_sistema para poder importar los archivos
 #que estan un nivel mas arriba (estilos.py, modelos.py, base_datos.py)
@@ -180,14 +180,16 @@ class EPPanelInvitado:
         EPcanvas.bind("<Leave>", EPdesactivarScroll)
 
         self.EPimagenesProductosTk = []  # referencias para que las fotos no desaparezcan
-        self.EPraiz.after(100, self.EPcargarProductos)
+        #_EPactivoRefresco se define ANTES de programar cualquier after(), para
+        #que hasta la primera carga pase por el mismo chequeo de seguridad
+        self._EPactivoRefresco = True
+        self.EPraiz.after(100, self.EPcargarProductosSiActivo)
         self._EPtimerRedimension = None
         self._EPanchoAnterior = 0
 
         #cada 30 segundos volvemos a preguntarle a la base de datos por los
         #productos, asi si el administrador agrega uno nuevo, aparece solo sin
         #que el cliente tenga que cerrar y volver a abrir la vitrina
-        self._EPactivoRefresco = True
         self._EPintervaloRefresco = 30000
         self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
 
@@ -198,7 +200,7 @@ class EPPanelInvitado:
             self._EPanchoAnterior = EPanchoActual
             if self._EPtimerRedimension:
                 self.EPraiz.after_cancel(self._EPtimerRedimension)
-            self._EPtimerRedimension = self.EPraiz.after(300, self.EPcargarProductos)
+            self._EPtimerRedimension = self.EPraiz.after(300, self.EPcargarProductosSiActivo)
         self.EPraiz.bind("<Configure>", _EPalRedimensionar)
 
     #esta funcion se vuelve a llamar a si misma cada 30 segundos, mientras la
@@ -206,8 +208,22 @@ class EPPanelInvitado:
     def _EPrefrescarCatalogoAutomatico(self):
         if not self._EPactivoRefresco:
             return
+        self.EPcargarProductosSiActivo()
+        if self._EPactivoRefresco:
+            self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
+
+    #envoltorio de seguridad: antes de tocar self.EPframeTarjetas, revisa que
+    #_EPactivoRefresco siga en True y que la ventana no haya sido destruida.
+    #sin esto, un after() programado (el timer de resize de 300ms o el
+    #refresco de 30s) podia dispararse justo despues de que la vitrina se
+    #reemplazo por el panel de admin/vendedor, o despues de cerrar la
+    #ventana, y tronaba con "bad window path name" porque el widget ya no existe
+    def EPcargarProductosSiActivo(self):
+        if not self._EPactivoRefresco:
+            return
+        if not self.EPraiz.winfo_exists():
+            return
         self.EPcargarProductos()
-        self.EPraiz.after(self._EPintervaloRefresco, self._EPrefrescarCatalogoAutomatico)
 
     # ---------- datos de productos ----------
 
@@ -370,7 +386,43 @@ class EPPanelInvitado:
         if isinstance(self.EPusuario, md.EPInvitado):
             self.EPabrirLogin()
         else:
-            messagebox.showinfo("Tu cuenta", getattr(self.EPusuario, "EPnombre", "Sesion iniciada"))
+            self.EPabrirMenuCuenta()
+
+    #menu pequeno que aparece justo debajo del icono de perfil, solo para
+    #clientes ya logueados (admin y vendedor no llegan aqui porque a ellos
+    #ya se les reemplazo la vitrina entera por su propio panel)
+    def EPabrirMenuCuenta(self):
+        EPmenu = tk.Menu(
+            self.EPraiz, tearoff=0, bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            activebackground=EPCOLOR_BOTON_PRIMARIO, activeforeground="white",
+            font=("Arial", 10)
+        )
+        EPmenu.add_command(label="Mi perfil", command=self.EPabrirPerfil)
+        EPmenu.add_separator()
+        EPmenu.add_command(label="Cerrar sesion", command=self.EPcerrarSesionCliente)
+        EPx = self.EPbotonPerfil.winfo_rootx()
+        EPy = self.EPbotonPerfil.winfo_rooty() + self.EPbotonPerfil.winfo_height()
+        try:
+            EPmenu.tk_popup(EPx, EPy)
+        finally:
+            EPmenu.grab_release()
+
+    def EPabrirPerfil(self):
+        EPVentanaPerfil(self.EPraiz, self.EPusuario, self.EPalActualizarDatosCliente)
+
+    #se llama despues de guardar cambios en la ventana de perfil, para que
+    #el nombre que se ve arriba a la derecha de la vitrina quede actualizado
+    def EPalActualizarDatosCliente(self):
+        self.EPetiquetaUsuario.config(text=self.EPusuario.EPnombre)
+
+    #a diferencia de admin y vendedor, el cliente NO cierra la ventana ni
+    #abre otra: se queda navegando la misma vitrina, solo que ahora vuelve
+    #a aparecer como invitado (sin carrito ni datos de la sesion anterior)
+    def EPcerrarSesionCliente(self):
+        self.EPusuario = md.EPInvitado()
+        self.EPcarrito.clear()
+        self.EPbotonCarrito.EPactualizarBadge(0)
+        self.EPetiquetaUsuario.config(text="Invitado")
 
     #abre el login como ventanita (Toplevel), NO como ventana principal
     #la vitrina se queda abierta detras, esperando a que el login se cierre
@@ -383,21 +435,34 @@ class EPPanelInvitado:
             self.EPactualizarEstadoUsuario()
 
     #esta funcion se llama justo despues de un login exitoso desde la vitrina
-    #si es administrador o vendedor, le abrimos su panel de verdad (como
-    #ventanita Toplevel, no como una segunda ventana principal, porque ya
-    #hay un mainloop corriendo con la vitrina). el cliente y el invitado se
-    #quedan navegando la vitrina normal, no tienen panel aparte
+    #si es administrador o vendedor, la vitrina se reemplaza por su panel de
+    #verdad DENTRO DE LA MISMA VENTANA (no se abre una ventana aparte), para
+    #que quede simetrico con el boton "Cerrar sesion" de esos paneles, que
+    #hace exactamente lo contrario: destruye su contenido y vuelve a armar
+    #la vitrina en esa misma ventana. asi nunca quedan dos ventanas abiertas
+    #al mismo tiempo. el cliente y el invitado se quedan navegando la
+    #vitrina normal, no tienen panel aparte
     def EPactualizarEstadoUsuario(self):
         EPnombre = getattr(self.EPusuario, "EPnombre", None) or "Invitado"
         self.EPetiquetaUsuario.config(text=EPnombre)
 
         if isinstance(self.EPusuario, md.EPAdministrador):
-            EPventanaPanel = tk.Toplevel(self.EPraiz)
-            EPPanelUsuarios(EPventanaPanel)
+            self.EPcarrusel.EPdetener()
+            self._EPactivoRefresco = False
+            if self._EPtimerRedimension:
+                self.EPraiz.after_cancel(self._EPtimerRedimension)
+            for EPwidget in self.EPraiz.winfo_children():
+                EPwidget.destroy()
+            EPPanelUsuarios(self.EPraiz)
 
         elif isinstance(self.EPusuario, md.EPVendedor):
-            EPventanaPanel = tk.Toplevel(self.EPraiz)
-            EPPanelVendedor(EPventanaPanel, self.EPusuario)
+            self.EPcarrusel.EPdetener()
+            self._EPactivoRefresco = False
+            if self._EPtimerRedimension:
+                self.EPraiz.after_cancel(self._EPtimerRedimension)
+            for EPwidget in self.EPraiz.winfo_children():
+                EPwidget.destroy()
+            EPPanelVendedor(self.EPraiz, self.EPusuario)
 
     # ---------- navegacion dentro de la vitrina ----------
 
@@ -411,7 +476,157 @@ class EPPanelInvitado:
     def EPalCerrarVentana(self):
         self.EPcarrusel.EPdetener()
         self._EPactivoRefresco = False
+        if self._EPtimerRedimension:
+            self.EPraiz.after_cancel(self._EPtimerRedimension)
         self.EPraiz.destroy()
+
+
+#ventana de perfil del cliente: foto, datos personales (nombre, correo,
+#telefono, direccion) y cambio de contrasena. es su propio "crud" chiquito,
+#el cliente edita sus propios datos igual que el admin edita los de otros
+#en panel_admin.py, pero mas simple porque aqui solo puede tocar su propia fila
+class EPVentanaPerfil:
+
+    def __init__(self, EPpadre, EPusuario, EPalGuardarCallback=None):
+        self.EPusuario = EPusuario
+        self.EPalGuardarCallback = EPalGuardarCallback
+
+        self.EPventana = tk.Toplevel(EPpadre)
+        self.EPventana.title("Mi perfil")
+        self.EPventana.geometry("420x600+280+70")
+        self.EPventana.configure(bg=EPCOLOR_FONDO)
+        self.EPventana.resizable(False, False)
+        #modal: mientras esta abierta, no se puede interactuar con la vitrina
+        #de atras, para que no se pierda de vista que hay cambios sin guardar
+        self.EPventana.grab_set()
+
+        self.EPconstruir()
+
+    def EPconstruir(self):
+        tk.Label(
+            self.EPventana, text="Mi perfil", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
+            font=("Arial", 15, "bold")
+        ).pack(pady=(18, 5))
+
+        #foto de perfil actual (o placeholder si todavia no ha subido ninguna)
+        EPfotoTk = EPcargarImagenTk(self.EPusuario.EPfotoRuta, 100, 100, "Foto")
+        self.EPfotoTk = EPfotoTk
+        self.EPlabelFoto = tk.Label(self.EPventana, image=self.EPfotoTk, bg=EPCOLOR_FONDO)
+        self.EPlabelFoto.pack(pady=(0, 8))
+        EPBotonRedondeado(
+            self.EPventana, "Cambiar foto", self.EPcambiarFoto,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=180, EPalto=34
+        ).pack(pady=(0, 15))
+
+        tk.Label(
+            self.EPventana, text="Datos personales", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
+            font=("Arial", 12, "bold")
+        ).pack(anchor="w", padx=30)
+
+        self.EPentradaNombre = self.EPcrearCampo("Nombre", self.EPusuario.EPnombre)
+        self.EPentradaCorreo = self.EPcrearCampo("Correo", self.EPusuario.EPcorreo)
+        self.EPentradaTelefono = self.EPcrearCampo("Telefono", self.EPusuario.EPtelefono or "")
+        self.EPentradaDireccion = self.EPcrearCampo("Direccion", self.EPusuario.EPdireccion or "")
+
+        EPBotonRedondeado(
+            self.EPventana, "Guardar datos", self.EPguardarDatos,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=220, EPalto=36
+        ).pack(pady=(12, 20))
+
+        #el cambio de contrasena solo tiene sentido si entro con correo y
+        #contrasena local. si entro con google o facebook, no hay contrasena
+        #nuestra que cambiar (EPverificarCredenciales ni siquiera la usa)
+        if getattr(self.EPusuario, "EPproveedorLogin", "local") == "local":
+            tk.Label(
+                self.EPventana, text="Cambiar contrasena", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
+                font=("Arial", 12, "bold")
+            ).pack(anchor="w", padx=30)
+            self.EPentradaPassword1 = self.EPcrearCampo("Nueva contrasena", "", EPesPassword=True)
+            self.EPentradaPassword2 = self.EPcrearCampo("Confirmar contrasena", "", EPesPassword=True)
+            EPBotonRedondeado(
+                self.EPventana, "Cambiar contrasena", self.EPguardarPassword,
+                EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=220, EPalto=36
+            ).pack(pady=(12, 20))
+
+    #funcion auxiliar para no repetir el mismo par de label + entry varias veces
+    def EPcrearCampo(self, EPetiqueta, EPvalorInicial, EPesPassword=False):
+        tk.Label(
+            self.EPventana, text=EPetiqueta, bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO, font=("Arial", 9)
+        ).pack(anchor="w", padx=30, pady=(8, 2))
+        EPentrada = tk.Entry(self.EPventana, font=("Arial", 10), show="*" if EPesPassword else "")
+        EPentrada.pack(padx=30, fill="x")
+        if EPvalorInicial:
+            EPentrada.insert(0, EPvalorInicial)
+        return EPentrada
+
+    #abre el explorador de archivos para elegir una foto desde la computadora
+    #y guarda la ruta directo en la base de datos (igual que hace panel_admin
+    #con sus propios cambios, no se espera a que toque "guardar datos" aparte)
+    def EPcambiarFoto(self):
+        EPruta = filedialog.askopenfilename(
+            title="Elige una foto de perfil",
+            filetypes=[("Imagenes", "*.png *.jpg *.jpeg")]
+        )
+        if not EPruta:
+            return
+        if bd is not None:
+            try:
+                bd.EPactualizarFotoUsuario(self.EPusuario.EPidUsuario, EPruta)
+            except Exception as EPerror:
+                messagebox.showerror("Error", f"No se pudo guardar la foto: {EPerror}")
+                return
+        self.EPusuario.EPfotoRuta = EPruta
+        self.EPfotoTk = EPcargarImagenTk(EPruta, 100, 100, "Foto")
+        self.EPlabelFoto.config(image=self.EPfotoTk)
+
+    def EPguardarDatos(self):
+        EPnombre = self.EPentradaNombre.get().strip()
+        EPcorreo = self.EPentradaCorreo.get().strip()
+        EPtelefono = self.EPentradaTelefono.get().strip()
+        EPdireccion = self.EPentradaDireccion.get().strip()
+
+        if not EPnombre or not EPcorreo:
+            messagebox.showwarning("Datos incompletos", "El nombre y el correo no pueden quedar vacios")
+            return
+        if bd is None:
+            messagebox.showerror("Sin conexion", "No hay conexion a la base de datos en este momento")
+            return
+        try:
+            bd.EPactualizarPerfilUsuario(self.EPusuario.EPidUsuario, EPnombre, EPcorreo, EPtelefono, EPdireccion)
+        except Exception as EPerror:
+            messagebox.showerror("Error", f"No se pudo guardar: {EPerror}")
+            return
+
+        self.EPusuario.EPnombre = EPnombre
+        self.EPusuario.EPcorreo = EPcorreo
+        self.EPusuario.EPtelefono = EPtelefono
+        self.EPusuario.EPdireccion = EPdireccion
+        messagebox.showinfo("Listo", "Tus datos se actualizaron correctamente")
+        if self.EPalGuardarCallback:
+            self.EPalGuardarCallback()
+
+    def EPguardarPassword(self):
+        EPp1 = self.EPentradaPassword1.get()
+        EPp2 = self.EPentradaPassword2.get()
+
+        if not EPp1 or len(EPp1) < 6:
+            messagebox.showwarning("Contrasena invalida", "La contrasena debe tener al menos 6 caracteres")
+            return
+        if EPp1 != EPp2:
+            messagebox.showwarning("No coincide", "Las dos contrasenas no son iguales")
+            return
+        if bd is None:
+            messagebox.showerror("Sin conexion", "No hay conexion a la base de datos en este momento")
+            return
+        try:
+            bd.EPactualizarPasswordUsuario(self.EPusuario.EPidUsuario, EPp1)
+        except Exception as EPerror:
+            messagebox.showerror("Error", f"No se pudo cambiar la contrasena: {EPerror}")
+            return
+
+        self.EPentradaPassword1.delete(0, "end")
+        self.EPentradaPassword2.delete(0, "end")
+        messagebox.showinfo("Listo", "Tu contrasena se actualizo correctamente")
 
 
 def EPiniciarPanelInvitado():

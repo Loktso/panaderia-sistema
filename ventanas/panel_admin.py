@@ -8,6 +8,7 @@ from tkinter import messagebox
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import base_datos as bd
+import alertas as al
 
 #los colores ya no se repiten aqui, se traen todos de estilos.py
 #asi si cambiamos un color, cambia en todo el sistema a la vez
@@ -80,6 +81,16 @@ class EPPanelUsuarios:
             EPheaderFrame, text="Gestio de ysuarios", bg=EPCOLOR_HEADER, fg="white",
             font=("Arial", 18, "bold")
         ).pack(side="left", padx=25, pady=15)
+        #boton de alertas de sobrante, junto al de cerrar sesion
+        EPBotonRedondeado(
+            EPheaderFrame, "Alertas de sobrante", self.EPabrirAlertas,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=180, EPalto=34
+        ).pack(side="right", padx=(0, 10))
+        #boton de cerrar sesion, a la derecha del encabezado
+        EPBotonRedondeado(
+            EPheaderFrame, "Cerrar sesion", self.EPcerrarSesion,
+            EPcolorFondo=EPCOLOR_BOTON_PELIGRO, EPancho=140, EPalto=34
+        ).pack(side="right", padx=25)
         #contenedor principal debajo del encabezado
         EPcontenidoFrame = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
         EPcontenidoFrame.pack(fill="both", expand=True, padx=20, pady=20)
@@ -128,6 +139,22 @@ class EPPanelUsuarios:
         EPBotonRedondeado(EPtarjetaFormulario, "Actualizar Seleccionado", self.EPactualizarUsuarioSeleccionado, EPcolorFondo=EPCOLOR_BOTON_PRIMARIO).pack(pady=5)
         EPBotonRedondeado(EPtarjetaFormulario, "Desactivar Seleccionado", self.EPdesactivarUsuarioSeleccionado, EPcolorFondo=EPCOLOR_BOTON_PELIGRO).pack(pady=5)
         EPBotonRedondeado(EPtarjetaFormulario, "Limpiar Formulario", self.EPlimpiarFormulario, EPcolorFondo=EPCOLOR_BOTON_NEUTRO).pack(pady=5)
+
+    #cierra la sesion de administrador: limpia esta misma ventana y vuelve a
+    #armar la vitrina de invitado adentro, en vez de abrir una ventana nueva
+    #(el import se hace aqui adentro y no arriba del archivo, para evitar un
+    #import circular: panel_invitado.py tambien importa de este archivo)
+    def EPcerrarSesion(self):
+        from ventanas.panel_invitado import EPPanelInvitado
+        for EPwidget in self.EPraiz.winfo_children():
+            EPwidget.destroy()
+        EPPanelInvitado(self.EPraiz)
+
+    #abre la ventana de alertas de sobrante (Toplevel, la de usuarios se
+    #queda abierta detras, no hace falta cerrarla para revisar las alertas)
+    def EPabrirAlertas(self):
+        EPventana = tk.Toplevel(self.EPraiz)
+        EPVentanaAlertas(EPventana)
 
     #funcion auxiliar para no repetir el mismo codigo de label + entry varias veces
     def EPcrearCampo(self, EPpadre, EPetiqueta, EPesPassword=False):
@@ -235,6 +262,120 @@ class EPPanelUsuarios:
         self.EPdireccionEntry.delete(0, tk.END)
         self.EProlCombobox.set("vendedor")
         self.EPidSeleccionado = None
+
+
+#ventana que muestra las alertas de sobrante ya calculadas por alertas.py,
+#y le permite al administrador ajustar el umbral y los dias consecutivos
+#que se usan para dispararlas (se guardan en configuracion_alertas)
+class EPVentanaAlertas:
+
+    def __init__(self, EPraiz):
+        self.EPraiz = EPraiz
+        self.EPraiz.title("Panaderia - Alertas de sobrante")
+        self.EPraiz.geometry("640x520")
+        self.EPraiz.configure(bg=EPCOLOR_FONDO)
+        self.EPconstruirInterfaz()
+        self.EPcargarAlertas()
+
+    def EPconstruirInterfaz(self):
+        EPheader = tk.Frame(self.EPraiz, bg=EPCOLOR_HEADER, height=60)
+        EPheader.pack(fill="x", side="top")
+        EPheader.pack_propagate(False)
+        tk.Label(
+            EPheader, text="Alertas de sobrante", bg=EPCOLOR_HEADER, fg="white",
+            font=("Arial", 15, "bold")
+        ).pack(side="left", padx=20, pady=12)
+
+        #tarjeta con la configuracion del umbral, arriba de la lista de alertas
+        EPtarjetaConfig = tk.Frame(self.EPraiz, bg=EPCOLOR_TARJETA, padx=15, pady=12)
+        EPtarjetaConfig.pack(fill="x", padx=20, pady=(15, 10))
+
+        tk.Label(
+            EPtarjetaConfig, text="Umbral de sobrante (%)", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 9)
+        ).grid(row=0, column=0, sticky="w")
+        self.EPentradaUmbral = tk.Entry(EPtarjetaConfig, width=8)
+        self.EPentradaUmbral.grid(row=1, column=0, padx=(0, 20), pady=(2, 0), sticky="w")
+
+        tk.Label(
+            EPtarjetaConfig, text="Dias consecutivos", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 9)
+        ).grid(row=0, column=1, sticky="w")
+        self.EPentradaDias = tk.Entry(EPtarjetaConfig, width=8)
+        self.EPentradaDias.grid(row=1, column=1, padx=(0, 20), pady=(2, 0), sticky="w")
+
+        EPBotonRedondeado(
+            EPtarjetaConfig, "Guardar configuracion", self.EPguardarConfiguracion,
+            EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=180, EPalto=32
+        ).grid(row=1, column=2, padx=(10, 0), pady=(2, 0))
+
+        #lista de alertas encontradas
+        EPtarjetaLista = tk.Frame(self.EPraiz, bg=EPCOLOR_TARJETA, padx=15, pady=15)
+        EPtarjetaLista.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+        tk.Label(
+            EPtarjetaLista, text="Productos con sobrante alto sostenido", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 12, "bold")
+        ).pack(anchor="w", pady=(0, 10))
+
+        self.EPlistaAlertas = tk.Listbox(
+            EPtarjetaLista, font=("Arial", 10), fg=EPCOLOR_BOTON_PELIGRO,
+            selectbackground=EPCOLOR_BOTON_PRIMARIO, height=12
+        )
+        self.EPlistaAlertas.pack(fill="both", expand=True)
+
+        EPBotonRedondeado(
+            self.EPraiz, "Revisar de nuevo", self.EPcargarAlertas,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=180, EPalto=34
+        ).pack(pady=(0, 15))
+
+    #trae la configuracion guardada y la muestra en los campos, para que el
+    #admin vea que valores esta usando ahora mismo antes de cambiarlos
+    def EPcargarConfiguracionActual(self):
+        EPumbral, EPdias = al.EPobtenerUmbralYDias()
+        self.EPentradaUmbral.delete(0, tk.END)
+        self.EPentradaUmbral.insert(0, str(EPumbral))
+        self.EPentradaDias.delete(0, tk.END)
+        self.EPentradaDias.insert(0, str(EPdias))
+
+    #vuelve a correr la revision de alertas y llena la lista con lo que
+    #encuentre (o un mensaje tranquilizador si no hay ninguna alerta)
+    def EPcargarAlertas(self):
+        self.EPcargarConfiguracionActual()
+        self.EPlistaAlertas.delete(0, tk.END)
+        try:
+            EPalertas = al.EPrevisarAlertasSobrante()
+        except Exception as EPerror:
+            self.EPlistaAlertas.insert(tk.END, f"No se pudo revisar: {EPerror}")
+            return
+
+        if not EPalertas:
+            self.EPlistaAlertas.insert(tk.END, "No hay alertas activas por ahora, todo dentro del umbral.")
+            return
+
+        for EPalerta in EPalertas:
+            self.EPlistaAlertas.insert(tk.END, EPalerta["mensaje"])
+
+    #guarda el nuevo umbral y dias consecutivos en configuracion_alertas,
+    #y de una vez vuelve a correr la revision con los valores nuevos
+    def EPguardarConfiguracion(self):
+        try:
+            EPumbral = float(self.EPentradaUmbral.get())
+            EPdias = int(self.EPentradaDias.get())
+        except ValueError:
+            messagebox.showwarning("Datos invalidos", "El umbral debe ser un numero y los dias un entero")
+            return
+        if EPumbral <= 0 or EPdias <= 0:
+            messagebox.showwarning("Datos invalidos", "El umbral y los dias deben ser mayores a cero")
+            return
+
+        EPconfig = bd.EPobtenerConfiguracionAlertas()
+        if EPconfig is None:
+            messagebox.showerror("Sin configuracion", "No se encontro una fila en configuracion_alertas para actualizar")
+            return
+
+        bd.EPactualizarConfiguracionAlertas(EPconfig["id_configuracion"], EPumbral, EPdias)
+        messagebox.showinfo("Listo", "Configuracion de alertas actualizada")
+        self.EPcargarAlertas()
 
 
 def EPiniciarPanelUsuarios():

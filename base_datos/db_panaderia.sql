@@ -25,6 +25,7 @@ CREATE TABLE usuarios (
     password_hash       VARCHAR(255)    NULL,
     telefono            VARCHAR(20)     NULL,
     direccion           VARCHAR(255)    NULL,
+    foto_ruta           VARCHAR(255)    NULL,   -- ruta local de la foto de perfil, opcional
     rol                 ENUM('administrador', 'vendedor', 'cliente') NOT NULL DEFAULT 'vendedor',
     proveedor_login     ENUM('local', 'google', 'facebook') NOT NULL DEFAULT 'local',
     activo              TINYINT(1)      NOT NULL DEFAULT 1,
@@ -125,10 +126,16 @@ CREATE TABLE configuracion_alertas (
 -- Datos iniciales de ejemplo
 -- =========================================================
 
--- Usuario administrador de prueba (contraseña real se genera
--- con bcrypt desde Python, este hash es solo un placeholder)
+-- usuario administrador de prueba
+-- contrasena en texto plano: Admin123!
+-- este hash se genero con bcrypt (bcrypt.hashpw) igual que lo hace base_datos.py
 INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login)
-VALUES ('Administrador Principal', 'admin@panaderia.com', 'PENDIENTE_HASH_BCRYPT', NULL, NULL, 'administrador', 'local');
+VALUES ('Administrador Principal', 'admin@panaderia.com', '$2b$12$ygL.5R0X/gfBWxLr6gULbOhiAB3yfgesuGx85.KSBwQ/.8fudPnCC', NULL, NULL, 'administrador', 'local');
+
+-- usuario vendedor de prueba
+-- contrasena en texto plano: Vendedor123!
+INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login)
+VALUES ('Vendedor Principal', 'vendedor@panaderia.com', '$2b$12$cnmrgSSo4ws4VaskNVKk2eTtDJn1q2b0MyusePriEBarAj8WOcuru', NULL, NULL, 'vendedor', 'local');
 
 -- Configuración de alertas por defecto
 INSERT INTO configuracion_alertas (umbral_porcentaje_sobrante, dias_consecutivos_alerta)

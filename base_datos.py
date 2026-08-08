@@ -132,6 +132,17 @@ def EPactualizarPasswordUsuario(EPidUsuario, EPnuevoPasswordPlano):
     EPconexion.close()
     return EPfilas
 
+#guarda la ruta de la foto de perfil que el usuario eligio desde su computadora
+def EPactualizarFotoUsuario(EPidUsuario, EPrutaFoto):
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor()
+    EPcursor.execute("UPDATE usuarios SET foto_ruta = %s WHERE id_usuario = %s", (EPrutaFoto, EPidUsuario))
+    EPconexion.commit()
+    EPfilas = EPcursor.rowcount
+    EPcursor.close()
+    EPconexion.close()
+    return EPfilas
+
 #cambia el rol de un usuario por ejemplo de vendedor a administrador
 def EPactualizarRolUsuario(EPidUsuario, EPnuevoRol):
     EPconexion = EPconectar()
@@ -316,6 +327,25 @@ def EPobtenerProduccionPorFecha(EPfecha):
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor(dictionary=True)
     EPcursor.execute("SELECT * FROM produccion_diaria WHERE fecha = %s", (EPfecha,))
+    EPresultado = EPcursor.fetchall()
+    EPcursor.close()
+    EPconexion.close()
+    return EPresultado
+
+#trae el historial de produccion de UN producto, de los ultimos EPdias dias
+#hasta EPfechaFin (incluida), ordenado del mas reciente al mas viejo. lo usa
+#alertas.py para revisar si un producto lleva varios dias seguidos con
+#mucho sobrante (no se puede saber eso viendo un solo dia a la vez)
+def EPobtenerProduccionPorProductoUltimosDias(EPidProducto, EPdias, EPfechaFin):
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor(dictionary=True)
+    EPquery = """
+        SELECT * FROM produccion_diaria
+        WHERE id_producto = %s AND fecha <= %s
+        ORDER BY fecha DESC
+        LIMIT %s
+    """
+    EPcursor.execute(EPquery, (EPidProducto, EPfechaFin, EPdias))
     EPresultado = EPcursor.fetchall()
     EPcursor.close()
     EPconexion.close()

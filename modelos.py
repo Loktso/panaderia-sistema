@@ -6,7 +6,7 @@ import calculadora_porcentajes as cp
 class EPUsuario:
 
     #esto se ejecuta cuando creamos un usuario nuevo ya que guarda todos sus datos
-    def __init__(self, EPidUsuario, EPnombre, EPcorreo, EPtelefono, EPdireccion, EProl, EPproveedorLogin, EPactivo):
+    def __init__(self, EPidUsuario, EPnombre, EPcorreo, EPtelefono, EPdireccion, EProl, EPproveedorLogin, EPactivo, EPfotoRuta=None):
         self.EPidUsuario = EPidUsuario
         self.EPnombre = EPnombre
         self.EPcorreo = EPcorreo
@@ -15,6 +15,7 @@ class EPUsuario:
         self.EProl = EProl
         self.EPproveedorLogin = EPproveedorLogin
         self.EPactivo = EPactivo
+        self.EPfotoRuta = EPfotoRuta
 
     #esta funcion arma un texto corto con la info del usuario para mostrarlo facil
     def EPmostrarInformacion(self):
@@ -43,7 +44,8 @@ class EPUsuario:
             EPdatos["direccion"],
             EPdatos["rol"],
             EPdatos["proveedor_login"],
-            EPdatos["activo"]
+            EPdatos["activo"],
+            EPdatos.get("foto_ruta")
         )
 
 #esta clase hereda de EPUsuario o sea que tiene todo lo de arriba mas lo que agreguemos aqui

@@ -41,6 +41,12 @@ class EPPanelVendedor:
             bg=EPCOLOR_HEADER, fg="white", font=("Arial", 16, "bold")
         ).pack(side="left", padx=25, pady=18)
 
+        #boton de cerrar sesion, a la derecha del encabezado
+        EPBotonRedondeado(
+            EPheader, "Cerrar sesion", self.EPcerrarSesion,
+            EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=140, EPalto=34
+        ).pack(side="right", padx=25)
+
         EPcontenido = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
         EPcontenido.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -118,6 +124,15 @@ class EPPanelVendedor:
         self.EPtablaVentas.column("total", width=90, anchor="center")
         self.EPtablaVentas.column("hora", width=140, anchor="center")
         self.EPtablaVentas.pack(fill="both", expand=True)
+
+    #cierra la sesion de vendedor: limpia esta misma ventana y vuelve a
+    #armar la vitrina de invitado adentro (import adentro de la funcion para
+    #evitar un import circular con panel_invitado.py)
+    def EPcerrarSesion(self):
+        from ventanas.panel_invitado import EPPanelInvitado
+        for EPwidget in self.EPraiz.winfo_children():
+            EPwidget.destroy()
+        EPPanelInvitado(self.EPraiz)
 
     def EPcargarProductosEnCombobox(self):
         EPproductos = bd.EPobtenerProductos()
