@@ -27,6 +27,12 @@ EPCOLORES_PLACEHOLDER = [
     EPCOLOR_BOTON_PELIGRO, EPCOLOR_BOTON_NEUTRO, "#D9A566",
 ]
 
+#categorias fijas de producto. viven aqui (y no en panel_admin.py, donde
+#nacieron) para que tanto el formulario de productos del administrador como
+#los chips de filtro de la vitrina usen siempre la misma lista, sin que se
+#puedan desincronizar los nombres
+EPCATEGORIAS_PRODUCTO = ["Pan", "Pasteles", "Helados", "Cafeteria", "Galletas", "Chocolates"]
+
 
 #genera una imagen "de mentira" (un rectangulo de color con un texto en medio)
 #esto es solo para que la pantalla se vea completa y con las medidas reales
@@ -84,3 +90,12 @@ def EPslugify(EPtexto):
     EPtexto = unicodedata.normalize("NFKD", EPtexto).encode("ascii", "ignore").decode("ascii")
     EPtexto = EPtexto.lower().strip().replace(" ", "_")
     return "".join(EPcaracter for EPcaracter in EPtexto if EPcaracter.isalnum() or EPcaracter == "_")
+
+
+#parecido a EPslugify, pero para comparar texto de busqueda: quita tildes y
+#mayusculas, sin convertir espacios en guion bajo, para poder comparar
+#"pastel de chocolate" contra lo que alguien escriba en la barra de busqueda
+#sin importar como haya escrito los acentos o las mayusculas
+def EPnormalizarBusqueda(EPtexto):
+    EPtexto = unicodedata.normalize("NFKD", EPtexto).encode("ascii", "ignore").decode("ascii")
+    return EPtexto.lower().strip()

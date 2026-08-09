@@ -17,7 +17,7 @@ import calculadora_porcentajes as cp
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_NEUTRO,
-    EPcargarImagenTk, EPrutaAsset, EPslugify,
+    EPcargarImagenTk, EPrutaAsset, EPslugify, EPCATEGORIAS_PRODUCTO, EPnormalizarBusqueda,
 )
 from ventanas.componentes_ui import EPBotonImagen, EPCarruselSuave
 from ventanas.login import EPVentanaLogin
@@ -37,12 +37,12 @@ except Exception:
 #base de datos o la tabla de productos esta vacia. asi siempre se puede ver
 #como queda el catalogo mientras se termina de configurar todo lo demas
 EPPRODUCTOS_DEMO = [
-    {"id_producto": 1, "nombre": "Pan Baguette", "categoria": "Panes", "precio_actual": 0.75},
-    {"id_producto": 2, "nombre": "Croissant", "categoria": "Panes", "precio_actual": 0.90},
+    {"id_producto": 1, "nombre": "Pan Baguette", "categoria": "Pan", "precio_actual": 0.75},
+    {"id_producto": 2, "nombre": "Croissant", "categoria": "Pan", "precio_actual": 0.90},
     {"id_producto": 3, "nombre": "Pastel de Chocolate", "categoria": "Pasteles", "precio_actual": 15.00},
     {"id_producto": 4, "nombre": "Galletas de Avena", "categoria": "Galletas", "precio_actual": 0.50},
     {"id_producto": 5, "nombre": "Cupcake de Vainilla", "categoria": "Pasteles", "precio_actual": 1.75},
-    {"id_producto": 6, "nombre": "Pan Integral", "categoria": "Panes", "precio_actual": 1.20},
+    {"id_producto": 6, "nombre": "Pan Integral", "categoria": "Pan", "precio_actual": 1.20},
 ]
 
 #nombres de archivo que va a buscar el carrusel principal dentro de assets/carrusel
@@ -77,6 +77,13 @@ class EPPanelInvitado:
         self._EPintervaloRefresco = 30000
         self._EPvistaActual = None
         self.EPimagenesProductosTk = []  # referencias para que las fotos no desaparezcan
+
+        #estado de los filtros del catalogo: texto de busqueda y referencias
+        #a los chips de categoria (para poder repintarlos al elegir uno).
+        #_EPcategoriaFiltro (None = "todos") se inicializa mas abajo, en
+        #EPconstruirCatalogo, porque se reinicia cada vez que se entra
+        self._EPtextoBusqueda = ""
+        self._EPchipsCategoria = {}
 
         self.EPconstruirInterfaz()
         self.EPraiz.protocol("WM_DELETE_WINDOW", self.EPalCerrarVentana)
@@ -191,6 +198,11 @@ class EPPanelInvitado:
             font=("Arial", 16, "bold")
         ).pack(anchor="w", pady=(0, 10))
 
+        #estado del filtro: None quiere decir "todas las categorias". se
+        #reinicia cada vez que se entra al catalogo, no se guarda al salir
+        self._EPcategoriaFiltro = None
+        self.EPconstruirFiltros()
+
         #canvas + scrollbar para poder scrollear el catalogo si hay muchos productos
         EPcanvas = tk.Canvas(self.EPmarcoCatalogo, bg=EPCOLOR_FONDO, highlightthickness=0)
         EPscrollbar = tk.Scrollbar(self.EPmarcoCatalogo, orient="vertical", command=EPcanvas.yview)
@@ -219,7 +231,6 @@ class EPPanelInvitado:
 
         EPcanvas.bind("<Enter>", EPactivarScroll)
         EPcanvas.bind("<Leave>", EPdesactivarScroll)
-
         self.EPimagenesProductosTk = []
         #_EPactivoRefresco se reactiva aqui porque EPlimpiarVista lo apaga
         #cada vez que se sale de esta seccion (a promociones o al detalle)
@@ -236,6 +247,56 @@ class EPPanelInvitado:
                 self.EPraiz.after_cancel(self._EPtimerRedimension)
             self._EPtimerRedimension = self.EPraiz.after(300, self.EPcargarProductosSiActivo)
         self.EPraiz.bind("<Configure>", _EPalRedimensionar)
+
+    #barra de filtros del catalogo: chips de categoria (Todos + las 6 fijas
+    #de EPCATEGORIAS_PRODUCTO) y una caja de busqueda que filtra por nombre.
+    #esta funcion ya estaba siendo llamada desde EPconstruirCatalogo, solo
+    #faltaba definirla
+    def EPconstruirFiltros(self):
+        EPfiltrosFrame = tk.Frame(self.EPmarcoCatalogo, bg=EPCOLOR_FONDO)
+        EPfiltrosFrame.pack(fill="x", pady=(0, 12))
+
+        #fila de chips de categoria, con "Todos" primero
+        EPfilaChips = tk.Frame(EPfiltrosFrame, bg=EPCOLOR_FONDO)
+        EPfilaChips.pack(fill="x", pady=(0, 10))
+
+        self._EPchipsCategoria = {}
+        EPtodasLasOpciones = ["Todos"] + EPCATEGORIAS_PRODUCTO
+        for EPcategoria in EPtodasLasOpciones:
+            EPchip = EPBotonRedondeado(
+                EPfilaChips, EPcategoria, lambda EPc=EPcategoria: self.EPaplicarFiltroCategoria(EPc),
+                EPcolorFondo=EPCOLOR_BOTON_PRIMARIO if EPcategoria == "Todos" else EPCOLOR_BOTON_NEUTRO,
+                EPancho=110, EPalto=32
+            )
+            EPchip.pack(side="left", padx=(0, 8))
+            self._EPchipsCategoria[EPcategoria] = EPchip
+
+        #caja de busqueda, filtra en cada tecla que se suelta (busqueda en vivo)
+        EPfilaBusqueda = tk.Frame(EPfiltrosFrame, bg=EPCOLOR_FONDO)
+        EPfilaBusqueda.pack(fill="x")
+
+        tk.Label(
+            EPfilaBusqueda, text="Buscar:", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO, font=("Arial", 10)
+        ).pack(side="left", padx=(0, 8))
+
+        self.EPbusquedaEntry = tk.Entry(EPfilaBusqueda, width=40, relief="solid", borderwidth=1)
+        self.EPbusquedaEntry.pack(side="left", ipady=3)
+        self.EPbusquedaEntry.bind("<KeyRelease>", self.EPaplicarFiltroBusqueda)
+
+    #se ejecuta al hacer clic en un chip de categoria: guarda cual quedo
+    #elegida, repinta todos los chips (el elegido en un color distinto a los
+    #demas) y vuelve a cargar el catalogo ya filtrado
+    def EPaplicarFiltroCategoria(self, EPcategoria):
+        self._EPcategoriaFiltro = None if EPcategoria == "Todos" else EPcategoria
+        for EPnombreChip, EPchip in self._EPchipsCategoria.items():
+            EPcolor = EPCOLOR_BOTON_PRIMARIO if EPnombreChip == EPcategoria else EPCOLOR_BOTON_NEUTRO
+            EPchip.EPcambiarColor(EPcolor)
+        self.EPcargarProductosSiActivo()
+
+    #se ejecuta con cada tecla soltada en la caja de busqueda
+    def EPaplicarFiltroBusqueda(self, EPevento):
+        self._EPtextoBusqueda = self.EPbusquedaEntry.get()
+        self.EPcargarProductosSiActivo()
 
     #esta funcion se vuelve a llamar a si misma cada 30 segundos, mientras la
     #ventana siga abierta (_EPactivoRefresco se pone en False al cerrar)
@@ -280,12 +341,36 @@ class EPPanelInvitado:
             EPwidget.destroy()
         self.EPimagenesProductosTk.clear()
 
-        EPproductos = self.EPobtenerProductos()
+        EPproductos = self.EPfiltrarProductos(self.EPobtenerProductos())
+
+        if not EPproductos:
+            tk.Label(
+                self.EPframeTarjetas, text="No se encontraron productos con ese filtro.",
+                bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO, font=("Arial", 11)
+            ).grid(row=0, column=0, padx=10, pady=20)
+            return
+
         EPanchoDisponible = self.EPframeTarjetas.winfo_width()
         EPcolumnas = max(1, EPanchoDisponible // 260)
         for EPindice, EPproducto in enumerate(EPproductos):
             EPfila, EPcolumna = divmod(EPindice, EPcolumnas)
             self.EPcrearTarjetaProductoEn(self.EPframeTarjetas, EPproducto, EPfila, EPcolumna)
+
+    #aplica el filtro de categoria (chip elegido) y el de busqueda (texto
+    #escrito) sobre la lista completa de productos. si _EPcategoriaFiltro
+    #es None, no filtra por categoria (equivale al chip "Todos")
+    def EPfiltrarProductos(self, EPproductos):
+        EPcategoriaFiltro = getattr(self, "_EPcategoriaFiltro", None)
+        EPtextoBusqueda = EPnormalizarBusqueda(getattr(self, "_EPtextoBusqueda", "") or "")
+
+        EPresultado = []
+        for EPproducto in EPproductos:
+            if EPcategoriaFiltro and EPproducto.get("categoria") != EPcategoriaFiltro:
+                continue
+            if EPtextoBusqueda and EPtextoBusqueda not in EPnormalizarBusqueda(EPproducto["nombre"]):
+                continue
+            EPresultado.append(EPproducto)
+        return EPresultado
 
     #tarjeta chica de producto (foto + nombre + precio + boton Agregar), la
     #misma que usan tanto el catalogo como promociones. EPpadre es el frame

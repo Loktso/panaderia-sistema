@@ -18,12 +18,8 @@ import alertas as al
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_PELIGRO, EPCOLOR_BOTON_NEUTRO,
-    EPcargarImagenTk, EPrutaAsset, EPslugify,
+    EPcargarImagenTk, EPrutaAsset, EPslugify, EPCATEGORIAS_PRODUCTO,
 )
-
-#categorias fijas que se usan tanto aqui como (mas adelante) en los chips
-#de filtro de la vitrina, para que el nombre coincida siempre igual
-EPCATEGORIAS_PRODUCTO = ["Pan", "Pasteles", "Helados", "Cafeteria", "Galletas", "Chocolates"]
 
 
 #esta clase dibuja un boton con las esquinas redondeadas usando un canvas
@@ -33,6 +29,7 @@ class EPBotonRedondeado(tk.Canvas):
         super().__init__(EPpadre, width=EPancho, height=EPalto, bg=EPpadre["bg"], highlightthickness=0)
         self.EPcomando = EPcomando
         self.EPcolorFondo = EPcolorFondo
+        self.EPtexto = EPtexto
         self.EPancho = EPancho
         self.EPalto = EPalto
         self.EPradio = EPradio
@@ -78,6 +75,13 @@ class EPBotonRedondeado(tk.Canvas):
             self.after(400, self.EPdesbloquear)
     def EPdesbloquear(self):
         self._EPbloqueado = False
+    #cambia el color de fondo del boton ya creado y lo vuelve a dibujar.
+    #se usa para marcar visualmente cual chip de categoria esta activo en
+    #la vitrina, sin tener que destruir y recrear el boton entero
+    def EPcambiarColor(self, EPcolorNuevo):
+        self.EPcolorFondo = EPcolorNuevo
+        self.EPdibujar(self.EPtexto)
+
     #cambia el cursor a manita cuando el mouse pasa por encima, se ve mas interactivo
     def EPalEntrarMouse(self, EPevento):
         self.config(cursor="hand2")
