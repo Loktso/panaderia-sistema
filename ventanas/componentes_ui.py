@@ -141,3 +141,28 @@ class EPCarruselSuave(tk.Label):
         self.config(image=self.EPphotoActual)
         EPintervaloPaso = max(15, self.EPduracionFade // self.EPpasosFade)
         self.after(EPintervaloPaso, lambda: self._EPejecutarPaso(EPpaso + 1, EPindiceOrigen, EPindiceDestino))
+
+#activa el scroll de rueda/trackpad de forma permanente mientras la
+#vista este visible, en vez de depender de <Enter>/<Leave> del canvas
+#(que no se disparan de forma confiable cuando las tarjetas cubren
+#todo el area visible del canvas)
+def EPactivarScrollCanvas(EPraiz, EPcanvas):
+    def EPscrollMouse(EPevento):
+        if not EPcanvas.winfo_exists():
+            return
+        if EPevento.delta > 0:
+            EPcanvas.yview_scroll(-1, "units")
+        elif EPevento.delta < 0:
+            EPcanvas.yview_scroll(1, "units")
+
+    def EPscrollLinuxArriba(EPevento):
+        if EPcanvas.winfo_exists():
+            EPcanvas.yview_scroll(-1, "units")
+
+    def EPscrollLinuxAbajo(EPevento):
+        if EPcanvas.winfo_exists():
+            EPcanvas.yview_scroll(1, "units")
+
+    EPraiz.bind_all("<MouseWheel>", EPscrollMouse)
+    EPraiz.bind_all("<Button-4>", EPscrollLinuxArriba)
+    EPraiz.bind_all("<Button-5>", EPscrollLinuxAbajo)

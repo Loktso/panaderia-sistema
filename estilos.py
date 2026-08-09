@@ -82,6 +82,24 @@ def EPrutaAsset(*EPpartes):
     return os.path.join(EPRUTA_ASSETS, *EPpartes)
 
 
+#centra una ventana (Tk o Toplevel) en funcion de su ventana padre, si tiene
+#una: cualquier Toplevel creado con tk.Toplevel(EPpadre) ya trae ese padre
+#guardado solo en EPventana.master, no hace falta pasarlo aparte. si la
+#ventana no tiene padre (la ventana Tk principal de la app, que master=None),
+#se centra respecto a toda la pantalla en su lugar
+def EPcentrarVentana(EPventana, EPancho, EPalto):
+    EPventana.update_idletasks()
+    EPpadre = EPventana.master
+    if EPpadre is not None:
+        EPpadre.update_idletasks()
+        EPx = EPpadre.winfo_rootx() + (EPpadre.winfo_width() - EPancho) // 2
+        EPy = EPpadre.winfo_rooty() + (EPpadre.winfo_height() - EPalto) // 2
+    else:
+        EPx = (EPventana.winfo_screenwidth() - EPancho) // 2
+        EPy = (EPventana.winfo_screenheight() - EPalto) // 2
+    EPventana.geometry(f"{EPancho}x{EPalto}+{EPx}+{EPy}")
+
+
 #convierte "Pastel de Chocolate" en "pastel_de_chocolate", para poder buscar
 #la imagen del producto sin importar tildes o mayusculas. esta se usa tanto
 #en la vitrina (para mostrar la foto) como en el panel de productos del

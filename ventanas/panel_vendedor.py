@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import base_datos as bd
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
-    EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO,
+    EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPcentrarVentana,
 )
 from ventanas.panel_admin import EPBotonRedondeado
 
@@ -21,7 +21,7 @@ class EPPanelVendedor:
         self.EPraiz = EPraiz
         self.EPusuario = EPusuario
         self.EPraiz.title("Panaderia - Panel de Vendedor")
-        self.EPraiz.geometry("950x600")
+        EPcentrarVentana(self.EPraiz, 950, 600)
         self.EPraiz.configure(bg=EPCOLOR_FONDO)
 
         self.EPmapaProductos = {}

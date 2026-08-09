@@ -9,134 +9,164 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 #importamos nuestros propios archivos para poder usar sus funciones aqui
 import base_datos as bd
 import modelos as md
-#esta clase representa toda la ventana de inicio de sesion
+
+#los colores y el boton redondeado son los mismos que usa todo el resto del
+#sistema (panel_admin.py, panel_vendedor.py, la vitrina), asi el login ya
+#no se ve como una ventana vieja de tkinter puro
+from estilos import (
+    EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
+    EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_NEUTRO,
+    EPcentrarVentana,
+)
+from ventanas.panel_admin import EPBotonRedondeado, EPcrearFrameScrollable
+
+
+#esta clase representa toda la ventana de inicio de sesion. sigue siendo un
+#Toplevel (la vitrina la abre asi, ver EPabrirLogin en panel_invitado.py),
+#pero adentro ya no abre una SEGUNDA ventana para el registro: el formulario
+#de registro reemplaza el contenido de esta misma ventana, igual que hacen
+#panel_admin.py entre sus secciones y la vitrina entre catalogo/promociones
 class EPVentanaLogin:
 
     #esto se ejecuta automaticamente apenas se crea la ventana
     def __init__(self, EPraiz):
         self.EPraiz = EPraiz
-        self.EPraiz.title("Panaderia - Iniciar Sesion")
-        self.EPraiz.geometry("400x400")
+        self.EPraiz.title("Panaderia - Cuenta")
+        EPcentrarVentana(self.EPraiz, 420, 640)
+        self.EPraiz.configure(bg=EPCOLOR_FONDO)
         self.EPraiz.resizable(False, False)
         #aqui vamos a guardar el usuario que inicio sesion, por ahora esta vacio
         self.EPusuarioAutenticado = None
-        #llamamos a la funcion que dibuja todos los botones y campos
         self.EPconstruirInterfaz()
 
-    #esta funcion arma visualmente la ventana osea el titulo los campos de texto y botones
+    #arma el encabezado fijo (igual al resto del sistema) y el contenedor
+    #donde va a vivir la vista activa: login o registro
     def EPconstruirInterfaz(self):
-        #titulo grande arriba de la ventana
-        EPtituloLabel = tk.Label(self.EPraiz, text="Sistema de Panaderia", font=("Arial", 16, "bold"))
-        EPtituloLabel.pack(pady=15)
-        #campo para escribir el correo
-        EPcorreoLabel = tk.Label(self.EPraiz, text="Correo")
-        EPcorreoLabel.pack()
-        self.EPcorreoEntry = tk.Entry(self.EPraiz, width=30)
-        self.EPcorreoEntry.pack(pady=5)
-        #campo para escribir la contrasena ademas el show=* hace que no se vea lo que escribes
-        EPpasswordLabel = tk.Label(self.EPraiz, text="Contrasena")
-        EPpasswordLabel.pack()
-        self.EPpasswordEntry = tk.Entry(self.EPraiz, width=30, show="*")
-        self.EPpasswordEntry.pack(pady=5)
-        #boton principal q cuando le dan clic ejecuta la funcion EPintentarLogin
-        EPbotonIngresar = tk.Button(self.EPraiz, text="Iniciar Sesion", command=self.EPintentarLogin, width=25)
-        EPbotonIngresar.pack(pady=15)
-        EPseparadorLabel = tk.Label(self.EPraiz, text="-------- o --------")
-        EPseparadorLabel.pack(pady=5)
-        #estos dos botones todavia no hacen login de verdad, solo muestran un mensaje
-        EPbotonGoogle = tk.Button(self.EPraiz, text="Ingresar con Google", command=self.EPloginGoogle, width=25)
-        EPbotonGoogle.pack(pady=3)
-        EPbotonFacebook = tk.Button(self.EPraiz, text="Ingresar con Facebook", command=self.EPloginFacebook, width=25)
-        EPbotonFacebook.pack(pady=3)
-        #boton para entrar sin necesidad de cuenta
-        EPbotonInvitado = tk.Button(self.EPraiz, text="Continuar como Invitado", command=self.EPentrarComoInvitado, width=25)
-        EPbotonInvitado.pack(pady=5)
-        #boton para que un cliente nuevo se registre
-        EPbotonCrearCuenta = tk.Button(self.EPraiz, text="Crear Cuenta Nueva", command=self.EPabrirRegistro, width=25)
-        EPbotonCrearCuenta.pack(pady=3)
+        EPheader = tk.Frame(self.EPraiz, bg=EPCOLOR_HEADER, height=70)
+        EPheader.pack(fill="x", side="top")
+        EPheader.pack_propagate(False)
+        tk.Label(
+            EPheader, text="Nuestra Panaderia", bg=EPCOLOR_HEADER, fg="white",
+            font=("Arial", 16, "bold")
+        ).pack(pady=18)
 
-    #esta funcion se ejecuta cuando el usuario le da clic a "iniciar sesion"
+        self.EPcontenedorVista = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
+        self.EPcontenedorVista.pack(fill="both", expand=True)
+
+        self.EPmostrarLogin()
+
+    #borra lo que haya dibujado la vista anterior (login o registro), para
+    #dejar el contenedor listo para dibujar la siguiente
+    def EPlimpiarVista(self):
+        for EPwidget in self.EPcontenedorVista.winfo_children():
+            EPwidget.destroy()
+
+    # ---------- vista: iniciar sesion ----------
+
+    def EPmostrarLogin(self):
+        self.EPlimpiarVista()
+        EPtarjeta = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_TARJETA, padx=25, pady=25)
+        EPtarjeta.pack(padx=30, pady=30, fill="both", expand=True)
+
+        tk.Label(
+            EPtarjeta, text="Iniciar sesion", bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            font=("Arial", 14, "bold")
+        ).pack(pady=(0, 15))
+
+        self.EPcorreoEntry = self.EPcrearCampo(EPtarjeta, "Correo")
+        self.EPpasswordEntry = self.EPcrearCampo(EPtarjeta, "Contrasena", EPesPassword=True)
+
+        EPBotonRedondeado(
+            EPtarjeta, "Iniciar Sesion", self.EPintentarLogin,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=260, EPalto=40
+        ).pack(pady=(18, 10))
+
+        tk.Label(EPtarjeta, text="o", bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 9)).pack()
+
+        EPBotonRedondeado(
+            EPtarjeta, "Ingresar con Google", self.EPloginGoogle,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=36
+        ).pack(pady=(10, 4))
+        EPBotonRedondeado(
+            EPtarjeta, "Ingresar con Facebook", self.EPloginFacebook,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=36
+        ).pack(pady=4)
+        EPBotonRedondeado(
+            EPtarjeta, "Continuar como Invitado", self.EPentrarComoInvitado,
+            EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=260, EPalto=36
+        ).pack(pady=(14, 4))
+        EPBotonRedondeado(
+            EPtarjeta, "Crear Cuenta Nueva", self.EPmostrarRegistro,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=36
+        ).pack(pady=4)
+
     def EPintentarLogin(self):
-        #tomamos lo que el usuario escribio en los campos de texto
         EPcorreo = self.EPcorreoEntry.get().strip()
         EPpassword = self.EPpasswordEntry.get()
-        #si dejo algun campo vacio mostramos advertencia y no seguimos
         if EPcorreo == "" or EPpassword == "":
             messagebox.showwarning("Campos vacios", "Debes ingresar correo y contrasena")
             return
-        #le preguntamos a la base de datos si ese correo y esa contrasena son correctos
-        #esta funcion esta en base_datos.py
         EPdatosUsuario = bd.EPverificarCredenciales(EPcorreo, EPpassword)
-        #si la base de datos no encontro coincidencia, devuelve None
         if EPdatosUsuario is None:
             messagebox.showerror("Error", "Correo o contrasena incorrectos")
             return
-        #si todo esta bien creamos el objeto correcto administrador o vendedor
-        #usando la funcion que armamos en modelos.py
         self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPdatosUsuario)
-        #mostramos un mensaje de bienvenida y cerramos esta ventana
         messagebox.showinfo("Bienvenido", self.EPusuarioAutenticado.EPmostrarInformacion())
         self.EPraiz.destroy()
 
     #por ahora estas solo avisan que la funcion no esta lista todavia
     def EPloginGoogle(self):
-        messagebox.showinfo("proximamente", "Login con Google estara disponible pronto")
+        messagebox.showinfo("Proximamente", "Login con Google estara disponible pronto")
 
     def EPloginFacebook(self):
         messagebox.showinfo("Proximamente", "Login con Facebook estara disponible pronto")
 
-    #abre una ventanita aparte (Toplevel) con el formulario de registro
-    #el login se queda abierto detras, esperando a que esta se cierre
-    def EPabrirRegistro(self):
-        EPventanaRegistro = tk.Toplevel(self.EPraiz)
-        EPventanaRegistro.title("Crear Cuenta Nueva")
-        EPventanaRegistro.geometry("380x520")
-        EPventanaRegistro.resizable(False, False)
+    def EPentrarComoInvitado(self):
+        self.EPusuarioAutenticado = md.EPInvitado()
+        self.EPraiz.destroy()
 
-        tk.Label(EPventanaRegistro, text="Crear cuenta de cliente", font=("Arial", 14, "bold")).pack(pady=15)
+    # ---------- vista: crear cuenta nueva ----------
+    # ya NO abre un Toplevel aparte: reemplaza el contenido de esta misma
+    # ventana, igual que EPmostrarLogin. el formulario va dentro de un frame
+    # scrollable (el mismo que usa panel_admin.py) por si la pantalla queda
+    # chica y no caben los 6 campos + botones
 
-        tk.Label(EPventanaRegistro, text="Nombre completo").pack()
-        EPnombreEntry = tk.Entry(EPventanaRegistro, width=30)
-        EPnombreEntry.pack(pady=5)
+    def EPmostrarRegistro(self):
+        self.EPlimpiarVista()
+        EPcontenedorFormulario, EPtarjeta = EPcrearFrameScrollable(self.EPcontenedorVista, EPfondo=EPCOLOR_TARJETA)
+        EPcontenedorFormulario.pack(padx=30, pady=30, fill="both", expand=True)
+        EPtarjeta.configure(padx=25, pady=25)
 
-        tk.Label(EPventanaRegistro, text="Correo").pack()
-        EPcorreoEntry = tk.Entry(EPventanaRegistro, width=30)
-        EPcorreoEntry.pack(pady=5)
+        tk.Label(
+            EPtarjeta, text="Crear cuenta de cliente", bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            font=("Arial", 14, "bold")
+        ).pack(pady=(0, 15))
 
-        tk.Label(EPventanaRegistro, text="Contrasena").pack()
-        EPpasswordEntry = tk.Entry(EPventanaRegistro, width=30, show="*")
-        EPpasswordEntry.pack(pady=5)
+        self.EPnombreRegistroEntry = self.EPcrearCampo(EPtarjeta, "Nombre completo")
+        self.EPcorreoRegistroEntry = self.EPcrearCampo(EPtarjeta, "Correo")
+        self.EPpasswordRegistroEntry = self.EPcrearCampo(EPtarjeta, "Contrasena", EPesPassword=True)
+        self.EPconfirmarRegistroEntry = self.EPcrearCampo(EPtarjeta, "Confirmar Contrasena", EPesPassword=True)
+        self.EPtelefonoRegistroEntry = self.EPcrearCampo(EPtarjeta, "Telefono (opcional)")
+        self.EPdireccionRegistroEntry = self.EPcrearCampo(EPtarjeta, "Direccion (opcional)")
 
-        tk.Label(EPventanaRegistro, text="Confirmar Contrasena").pack()
-        EPconfirmarEntry = tk.Entry(EPventanaRegistro, width=30, show="*")
-        EPconfirmarEntry.pack(pady=5)
-
-        tk.Label(EPventanaRegistro, text="Telefono (opcional)").pack()
-        EPtelefonoEntry = tk.Entry(EPventanaRegistro, width=30)
-        EPtelefonoEntry.pack(pady=5)
-
-        tk.Label(EPventanaRegistro, text="Direccion (opcional)").pack()
-        EPdireccionEntry = tk.Entry(EPventanaRegistro, width=30)
-        EPdireccionEntry.pack(pady=5)
-
-        EPbotonConfirmar = tk.Button(
-            EPventanaRegistro, text="Registrarme", width=25,
-            command=lambda: self.EPconfirmarRegistro(
-                EPventanaRegistro, EPnombreEntry, EPcorreoEntry, EPpasswordEntry,
-                EPconfirmarEntry, EPtelefonoEntry, EPdireccionEntry
-            )
-        )
-        EPbotonConfirmar.pack(pady=15)
+        EPBotonRedondeado(
+            EPtarjeta, "Registrarme", self.EPconfirmarRegistro,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=260, EPalto=40
+        ).pack(pady=(18, 8))
+        EPBotonRedondeado(
+            EPtarjeta, "Volver a Iniciar Sesion", self.EPmostrarLogin,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=34
+        ).pack(pady=(4, 15))
 
     #valida los datos del formulario de registro y crea la cuenta si todo esta bien
     #al terminar, deja al cliente ya logueado, no tiene que volver a escribir sus datos
-    def EPconfirmarRegistro(self, EPventanaRegistro, EPnombreEntry, EPcorreoEntry, EPpasswordEntry, EPconfirmarEntry, EPtelefonoEntry, EPdireccionEntry):
-        EPnombre = EPnombreEntry.get().strip()
-        EPcorreo = EPcorreoEntry.get().strip()
-        EPpassword = EPpasswordEntry.get()
-        EPconfirmar = EPconfirmarEntry.get()
-        EPtelefono = EPtelefonoEntry.get().strip() or None
-        EPdireccion = EPdireccionEntry.get().strip() or None
+    def EPconfirmarRegistro(self):
+        EPnombre = self.EPnombreRegistroEntry.get().strip()
+        EPcorreo = self.EPcorreoRegistroEntry.get().strip()
+        EPpassword = self.EPpasswordRegistroEntry.get()
+        EPconfirmar = self.EPconfirmarRegistroEntry.get()
+        EPtelefono = self.EPtelefonoRegistroEntry.get().strip() or None
+        EPdireccion = self.EPdireccionRegistroEntry.get().strip() or None
 
         if EPnombre == "" or EPcorreo == "" or EPpassword == "":
             messagebox.showwarning("Campos incompletos", "Nombre, correo y contrasena son obligatorios")
@@ -158,13 +188,18 @@ class EPVentanaLogin:
         self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPdatosNuevoUsuario)
 
         messagebox.showinfo("Cuenta creada", f"Bienvenido/a {EPnombre}, tu cuenta se creo correctamente")
-        EPventanaRegistro.destroy()
         self.EPraiz.destroy()
 
-    #esta funcion crea un usuario invitado sin pedir ningun dato
-    def EPentrarComoInvitado(self):
-        self.EPusuarioAutenticado = md.EPInvitado()
-        self.EPraiz.destroy()
+    # ---------- auxiliar compartido por las dos vistas ----------
+
+    def EPcrearCampo(self, EPpadre, EPetiqueta, EPesPassword=False):
+        tk.Label(
+            EPpadre, text=EPetiqueta, bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 9)
+        ).pack(anchor="w", pady=(8, 2))
+        EPentry = tk.Entry(EPpadre, width=30, relief="solid", borderwidth=1, show="*" if EPesPassword else "")
+        EPentry.pack(ipady=4)
+        return EPentry
+
 
 #esta funcion crea la ventana la muestra en pantalla y espera a que el usuario haga algo
 #cuando la ventana se cierra devuelve el usuario que quedo autenticado o None si no inicio sesion
@@ -173,6 +208,7 @@ def EPiniciarVentanaLogin():
     EPventana = EPVentanaLogin(EPraiz)
     EPraiz.mainloop()
     return EPventana.EPusuarioAutenticado
+
 
 #sirve para probar la ventana sola sin necesidad del resto del programa
 if __name__ == "__main__":

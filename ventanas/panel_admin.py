@@ -1,24 +1,32 @@
 import sys
 import os
 import shutil
+import datetime
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from tkinter import filedialog
 from PIL import Image
+import tkinter.font as tkfont
+
+#graficos embebidos dentro de la ventana de tkinter, para el panel de
+#ventas y reportes (barra de ventas por dia)
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 #buscamos la carpeta de arriba para poder importar base_datos.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import base_datos as bd
 import alertas as al
+import exportar_reportes as er
 
 #los colores ya no se repiten aqui, se traen todos de estilos.py
 #asi si cambiamos un color, cambia en todo el sistema a la vez
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_PELIGRO, EPCOLOR_BOTON_NEUTRO,
-    EPcargarImagenTk, EPrutaAsset, EPslugify, EPCATEGORIAS_PRODUCTO,
+    EPcargarImagenTk, EPrutaAsset, EPslugify, EPCATEGORIAS_PRODUCTO, EPcentrarVentana,
 )
 
 
@@ -44,6 +52,13 @@ class EPBotonRedondeado(tk.Canvas):
     #dibuja el rectangulo con esquinas curvas y el texto encima
     def EPdibujar(self, EPtexto):
         self.delete("all")
+        #si el texto no cabe en el ancho pedido, agrandamos el boton en vez
+        # #de dejar que el texto se corte
+        EPfuente = tkfont.Font(family="Arial", size=10, weight="bold")
+        EPanchoNecesario = EPfuente.measure(EPtexto) + 30
+        if EPanchoNecesario > self.EPancho:
+            self.EPancho = EPanchoNecesario
+            self.config(width=self.EPancho)
         EPpuntos = [
             self.EPradio, 0,
             self.EPancho - self.EPradio, 0,
@@ -173,7 +188,8 @@ class EPPanelAdmin:
     def __init__(self, EPraiz):
         self.EPraiz = EPraiz
         self.EPraiz.title("Panaderia - Administracion")
-        self.EPraiz.geometry("1100x650")
+        EPcentrarVentana(self.EPraiz, 1200, 650)
+        self.EPraiz.minsize(1000, 500)
         self.EPraiz.configure(bg=EPCOLOR_FONDO)
         self.EPraiz.minsize(900, 500)
 
@@ -207,17 +223,22 @@ class EPPanelAdmin:
         ).pack(side="right", padx=(15, 0))
 
         EPBotonRedondeado(
-            EPbotonesFrame, "Alertas de sobrante", self.EPmostrarAlertas,
+            EPbotonesFrame, "Reportes", self.EPmostrarReportes,
             EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=170, EPalto=34
         ).pack(side="right", padx=5)
 
         EPBotonRedondeado(
-            EPbotonesFrame, "Gestion de usuarios", self.EPmostrarUsuarios,
+            EPbotonesFrame, "Alertas", self.EPmostrarAlertas,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=170, EPalto=34
+        ).pack(side="right", padx=5)
+
+        EPBotonRedondeado(
+            EPbotonesFrame, "Usuarios", self.EPmostrarUsuarios,
             EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=170, EPalto=34
         ).pack(side="right", padx=5)
 
         EPBotonRedondeado(
-            EPbotonesFrame, "Gestion de productos", self.EPmostrarProductos,
+            EPbotonesFrame, "Productos", self.EPmostrarProductos,
             EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=180, EPalto=34
         ).pack(side="right", padx=5)
 
@@ -241,6 +262,11 @@ class EPPanelAdmin:
         self.EPlimpiarVista()
         self.EPetiquetaTitulo.config(text="Alertas de sobrante")
         EPVentanaAlertas(self.EPcontenedorVista)
+
+    def EPmostrarReportes(self):
+        self.EPlimpiarVista()
+        self.EPetiquetaTitulo.config(text="Ventas y reportes")
+        EPPanelReportes(self.EPcontenedorVista)
 
     #cierra la sesion de administrador: limpia toda la ventana (no solo el
     #area de contenido, tambien el header) y vuelve a armar la vitrina de
@@ -568,7 +594,7 @@ class EPPanelProductos:
         EPhistorial = bd.EPobtenerHistorialPrecios(self.EPidSeleccionado)
         EPventana = tk.Toplevel(self.EPcontenedor)
         EPventana.title("Historial de precios")
-        EPventana.geometry("420x360")
+        EPcentrarVentana(EPventana, 420, 360)
         EPventana.configure(bg=EPCOLOR_FONDO)
         tk.Label(
             EPventana, text="Historial de precios", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
@@ -888,6 +914,213 @@ class EPVentanaAlertas:
         bd.EPactualizarConfiguracionAlertas(EPconfig["id_configuracion"], EPumbral, EPdias)
         messagebox.showinfo("Listo", "Configuracion de alertas actualizada")
         self.EPcargarAlertas()
+
+
+# =========================================================
+# panel de ventas y reportes: filtro de periodo, tarjetas resumen,
+# grafico de ventas por dia (matplotlib embebido) y tabla detallada.
+# los botones de exportar arman un PDF o un Excel con exportar_reportes.py
+# =========================================================
+class EPPanelReportes:
+
+    def __init__(self, EPcontenedor):
+        self.EPcontenedor = EPcontenedor
+        self.EPventasActuales = []
+        self.EPcanvasGrafico = None
+        self.EPconstruirInterfaz()
+        self.EPaplicarFiltro()
+
+    def EPconstruirInterfaz(self):
+        #fila superior: selector de periodo + botones de exportar
+        EPfilaFiltro = tk.Frame(self.EPcontenedor, bg=EPCOLOR_FONDO)
+        EPfilaFiltro.pack(fill="x", padx=20, pady=(15, 10))
+
+        tk.Label(
+            EPfilaFiltro, text="Periodo:", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO, font=("Arial", 10)
+        ).pack(side="left")
+        self.EPperiodoCombobox = ttk.Combobox(
+            EPfilaFiltro, values=["Hoy", "Ultimos 7 dias", "Ultimos 30 dias"],
+            state="readonly", width=18
+        )
+        self.EPperiodoCombobox.current(0)
+        self.EPperiodoCombobox.pack(side="left", padx=(8, 15))
+        self.EPperiodoCombobox.bind("<<ComboboxSelected>>", lambda EPevento: self.EPaplicarFiltro())
+
+        EPBotonRedondeado(
+            EPfilaFiltro, "Exportar PDF", self.EPexportarPDF,
+            EPcolorFondo=EPCOLOR_BOTON_PELIGRO, EPancho=140, EPalto=32
+        ).pack(side="right", padx=(8, 0))
+        EPBotonRedondeado(
+            EPfilaFiltro, "Exportar Excel", self.EPexportarExcel,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=140, EPalto=32
+        ).pack(side="right")
+
+        #tarjetas de resumen: total vendido, numero de ventas, producto top
+        EPfilaResumen = tk.Frame(self.EPcontenedor, bg=EPCOLOR_FONDO)
+        EPfilaResumen.pack(fill="x", padx=20, pady=(0, 10))
+
+        self.EPtarjetaTotal = self.EPcrearTarjetaResumen(EPfilaResumen, "Total vendido", "$0.00")
+        self.EPtarjetaTotal.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.EPtarjetaCantidad = self.EPcrearTarjetaResumen(EPfilaResumen, "Numero de ventas", "0")
+        self.EPtarjetaCantidad.pack(side="left", fill="x", expand=True, padx=8)
+        self.EPtarjetaTop = self.EPcrearTarjetaResumen(EPfilaResumen, "Producto mas vendido", "-")
+        self.EPtarjetaTop.pack(side="left", fill="x", expand=True, padx=(8, 0))
+
+        #cuerpo: grafico a la izquierda, tabla detallada a la derecha
+        EPfilaCuerpo = tk.Frame(self.EPcontenedor, bg=EPCOLOR_FONDO)
+        EPfilaCuerpo.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+
+        self.EPmarcoGrafico = tk.Frame(EPfilaCuerpo, bg=EPCOLOR_TARJETA, padx=10, pady=10)
+        self.EPmarcoGrafico.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        tk.Label(
+            self.EPmarcoGrafico, text="Ventas por dia", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 11, "bold")
+        ).pack(anchor="w")
+
+        EPmarcoTabla = tk.Frame(EPfilaCuerpo, bg=EPCOLOR_TARJETA, padx=10, pady=10)
+        EPmarcoTabla.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        tk.Label(
+            EPmarcoTabla, text="Detalle de ventas", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 11, "bold")
+        ).pack(anchor="w", pady=(0, 8))
+
+        EPcolumnas = ("fecha", "producto", "vendedor", "cantidad", "total")
+        self.EPtabla = ttk.Treeview(EPmarcoTabla, columns=EPcolumnas, show="headings", height=12)
+        EPdefinicionColumnas = [
+            ("fecha", "Fecha", 95, "w"), ("producto", "Producto", 130, "w"),
+            ("vendedor", "Vendedor", 100, "w"), ("cantidad", "Cant.", 50, "center"),
+            ("total", "Total", 70, "center"),
+        ]
+        for EPcol, EPtitulo, EPancho, EPalineacion in EPdefinicionColumnas:
+            self.EPtabla.heading(EPcol, text=EPtitulo)
+            self.EPtabla.column(EPcol, width=EPancho, anchor=EPalineacion)
+        self.EPtabla.pack(fill="both", expand=True)
+
+    #tarjeta reutilizable con un titulo chico arriba y un valor grande abajo;
+    #guardamos la etiqueta del valor en la propia tarjeta para poder
+    #actualizarla despues sin tener que reconstruir todo
+    def EPcrearTarjetaResumen(self, EPpadre, EPtitulo, EPvalorInicial):
+        EPtarjeta = tk.Frame(EPpadre, bg=EPCOLOR_TARJETA, padx=15, pady=12)
+        tk.Label(
+            EPtarjeta, text=EPtitulo, bg=EPCOLOR_TARJETA, fg="#8B7A6A", font=("Arial", 9)
+        ).pack(anchor="w")
+        EPetiquetaValor = tk.Label(
+            EPtarjeta, text=EPvalorInicial, bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 16, "bold")
+        )
+        EPetiquetaValor.pack(anchor="w", pady=(4, 0))
+        EPtarjeta.EPetiquetaValor = EPetiquetaValor
+        return EPtarjeta
+
+    #calcula el rango de fechas segun lo elegido en el combobox. "hoy"
+    #es un solo dia, los otros dos son ventanas moviles hacia atras
+    #contando desde hoy incluido
+    def EPobtenerRangoFechas(self):
+        EPhoy = datetime.date.today()
+        EPseleccion = self.EPperiodoCombobox.get()
+        if EPseleccion == "Ultimos 7 dias":
+            EPdesde = EPhoy - datetime.timedelta(days=6)
+        elif EPseleccion == "Ultimos 30 dias":
+            EPdesde = EPhoy - datetime.timedelta(days=29)
+        else:
+            EPdesde = EPhoy
+        return EPdesde, EPhoy
+
+    #vuelve a consultar la base de datos con el rango de fechas actual y
+    #refresca las tres partes de la pantalla (resumen, tabla, grafico)
+    def EPaplicarFiltro(self):
+        EPdesde, EPhasta = self.EPobtenerRangoFechas()
+        try:
+            self.EPventasActuales = bd.EPobtenerVentasDetalladas(EPdesde, EPhasta)
+        except Exception as EPerror:
+            messagebox.showerror("Error", f"No se pudieron cargar las ventas: {EPerror}")
+            self.EPventasActuales = []
+        self.EPactualizarResumen()
+        self.EPactualizarTabla()
+        self.EPactualizarGrafico()
+
+    def EPactualizarResumen(self):
+        EPtotal = sum(float(EPventa["total"]) for EPventa in self.EPventasActuales)
+        self.EPtarjetaTotal.EPetiquetaValor.config(text=f"${EPtotal:.2f}")
+        self.EPtarjetaCantidad.EPetiquetaValor.config(text=str(len(self.EPventasActuales)))
+
+        if self.EPventasActuales:
+            EPcantidadPorProducto = {}
+            for EPventa in self.EPventasActuales:
+                EPnombre = EPventa["nombre_producto"]
+                EPcantidadPorProducto[EPnombre] = EPcantidadPorProducto.get(EPnombre, 0) + EPventa["cantidad"]
+            EPproductoTop = max(EPcantidadPorProducto, key=EPcantidadPorProducto.get)
+            self.EPtarjetaTop.EPetiquetaValor.config(text=EPproductoTop)
+        else:
+            self.EPtarjetaTop.EPetiquetaValor.config(text="-")
+
+    def EPactualizarTabla(self):
+        for EPfila in self.EPtabla.get_children():
+            self.EPtabla.delete(EPfila)
+        for EPventa in self.EPventasActuales:
+            EPfecha = EPventa["fecha_hora"]
+            EPfechaTexto = EPfecha.strftime("%d/%m %H:%M") if hasattr(EPfecha, "strftime") else str(EPfecha)
+            self.EPtabla.insert("", "end", values=(
+                EPfechaTexto, EPventa["nombre_producto"], EPventa["nombre_vendedor"],
+                EPventa["cantidad"], f"${float(EPventa['total']):.2f}"
+            ))
+
+    #agrupa las ventas por dia y dibuja una barra por dia. si no hay
+    #ventas en el periodo, muestra un mensaje en vez de un grafico vacio
+    def EPactualizarGrafico(self):
+        if self.EPcanvasGrafico is not None:
+            self.EPcanvasGrafico.get_tk_widget().destroy()
+
+        EPtotalPorDia = {}
+        for EPventa in self.EPventasActuales:
+            EPfecha = EPventa["fecha_hora"]
+            EPclave = EPfecha.strftime("%d/%m") if hasattr(EPfecha, "strftime") else str(EPfecha)
+            EPtotalPorDia[EPclave] = EPtotalPorDia.get(EPclave, 0) + float(EPventa["total"])
+
+        EPfigura = Figure(figsize=(4.2, 3.4), dpi=90)
+        EPejes = EPfigura.add_subplot(111)
+        if EPtotalPorDia:
+            EPejes.bar(list(EPtotalPorDia.keys()), list(EPtotalPorDia.values()), color="#C97B3D")
+            EPejes.tick_params(axis="x", labelrotation=45, labelsize=7)
+        else:
+            EPejes.text(0.5, 0.5, "Sin ventas en este periodo", ha="center", va="center", fontsize=9)
+            EPejes.set_xticks([])
+            EPejes.set_yticks([])
+        EPejes.set_ylabel("Total ($)", fontsize=8)
+        EPfigura.tight_layout()
+
+        self.EPcanvasGrafico = FigureCanvasTkAgg(EPfigura, master=self.EPmarcoGrafico)
+        self.EPcanvasGrafico.draw()
+        self.EPcanvasGrafico.get_tk_widget().pack(fill="both", expand=True)
+
+    def EPexportarPDF(self):
+        if not self.EPventasActuales:
+            messagebox.showwarning("Sin datos", "No hay ventas en este periodo para exportar")
+            return
+        EPruta = filedialog.asksaveasfilename(
+            defaultextension=".pdf", filetypes=[("PDF", "*.pdf")], initialfile="reporte_ventas.pdf"
+        )
+        if not EPruta:
+            return
+        try:
+            er.EPexportarVentasPDF(self.EPventasActuales, EPruta)
+            messagebox.showinfo("Listo", f"Reporte guardado en:\n{EPruta}")
+        except Exception as EPerror:
+            messagebox.showerror("Error", f"No se pudo exportar el PDF: {EPerror}")
+
+    def EPexportarExcel(self):
+        if not self.EPventasActuales:
+            messagebox.showwarning("Sin datos", "No hay ventas en este periodo para exportar")
+            return
+        EPruta = filedialog.asksaveasfilename(
+            defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx")], initialfile="reporte_ventas.xlsx"
+        )
+        if not EPruta:
+            return
+        try:
+            er.EPexportarVentasExcel(self.EPventasActuales, EPruta)
+            messagebox.showinfo("Listo", f"Reporte guardado en:\n{EPruta}")
+        except Exception as EPerror:
+            messagebox.showerror("Error", f"No se pudo exportar el Excel: {EPerror}")
 
 
 def EPiniciarPanelAdmin():

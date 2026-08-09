@@ -18,8 +18,9 @@ from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_NEUTRO,
     EPcargarImagenTk, EPrutaAsset, EPslugify, EPCATEGORIAS_PRODUCTO, EPnormalizarBusqueda,
+    EPcentrarVentana,
 )
-from ventanas.componentes_ui import EPBotonImagen, EPCarruselSuave
+from ventanas.componentes_ui import EPBotonImagen, EPCarruselSuave, EPactivarScrollCanvas
 from ventanas.login import EPVentanaLogin
 from ventanas.panel_admin import EPBotonRedondeado, EPPanelAdmin, EPobtenerFotosProducto
 from ventanas.panel_vendedor import EPPanelVendedor
@@ -60,7 +61,7 @@ class EPPanelInvitado:
     def __init__(self, EPraiz):
         self.EPraiz = EPraiz
         self.EPraiz.title("Panaderia - Bienvenido")
-        self.EPraiz.geometry("1200x780+120+30")
+        EPcentrarVentana(self.EPraiz, 1200, 780)
         self.EPraiz.configure(bg=EPCOLOR_FONDO)
         self.EPraiz.minsize(1000, 650)
 
@@ -98,7 +99,7 @@ class EPPanelInvitado:
         #nuevas, solo se destruye y se vuelve a armar lo que hay aqui adentro
         self.EPcontenedorVista = tk.Frame(self.EPraiz, bg=EPCOLOR_FONDO)
         self.EPcontenedorVista.pack(fill="both", expand=True)
-        self.EPmostrarCatalogo()
+        self.EPmostrarInicio()
 
     def EPconstruirHeader(self):
         EPheader = tk.Frame(self.EPraiz, bg=EPCOLOR_HEADER, height=95)
@@ -106,14 +107,21 @@ class EPPanelInvitado:
         EPheader.pack_propagate(False)
 
         #logo + nombre a la izquierda (el logo es un placeholder hasta que exista
-        #assets/logo.png; el nombre del negocio se puede cambiar aqui mismo)
+        #assets/logo.png; el nombre del negocio se puede cambiar aqui mismo).
+        #ambos son clicables y llevan de vuelta a Inicio, igual que el logo
+        #de cualquier pagina web, porque los iconos de la derecha (Catalogo,
+        #Promociones, Carrito, Cuenta) no incluyen ninguno para "regresar"
         EPlogoTk = EPcargarImagenTk(EPrutaAsset("logo.png"), 60, 60, "LOGO")
         self.EPlogoTk = EPlogoTk  # guardamos referencia, si no la imagen desaparece
-        tk.Label(EPheader, image=self.EPlogoTk, bg=EPCOLOR_HEADER).place(x=20, y=17)
-        tk.Label(
+        EPlabelLogo = tk.Label(EPheader, image=self.EPlogoTk, bg=EPCOLOR_HEADER, cursor="hand2")
+        EPlabelLogo.place(x=20, y=17)
+        EPlabelNombre = tk.Label(
             EPheader, text="Nuestra Panaderia", bg=EPCOLOR_HEADER, fg="white",
-            font=("Arial", 18, "bold")
-        ).place(x=95, y=32)
+            font=("Arial", 18, "bold"), cursor="hand2"
+        )
+        EPlabelNombre.place(x=95, y=32)
+        EPlabelLogo.bind("<Button-1>", lambda EPevento: self.EPmostrarInicio())
+        EPlabelNombre.bind("<Button-1>", lambda EPevento: self.EPmostrarInicio())
 
         #iconos de navegacion (imagen clicable, no boton cuadrado de texto)
         EPiconos = tk.Frame(EPheader, bg=EPCOLOR_HEADER)
@@ -171,16 +179,20 @@ class EPPanelInvitado:
         #<Leave> nunca llega, y el binding se queda apuntando a un canvas
         #que ya no existe, dando "invalid command name" al mover la rueda)
         self.EPraiz.unbind_all("<MouseWheel>")
+        self.EPraiz.unbind_all("<Button-4>")
+        self.EPraiz.unbind_all("<Button-5>")
         for EPwidget in self.EPcontenedorVista.winfo_children():
             EPwidget.destroy()
 
-    #seccion: catalogo completo (carrusel de fotos grandes arriba + la
-    #cuadricula de productos abajo). es la vista con la que arranca la app
-    def EPmostrarCatalogo(self):
+    #seccion: INICIO. es la portada llamativa con la que arranca la app:
+    #carrusel de fotos grandes arriba, y una muestra corta de productos
+    #abajo (no el catalogo completo). para navegar y buscar de verdad, esta
+    #el boton "Catalogo" del header
+    def EPmostrarInicio(self):
         self.EPlimpiarVista()
-        self._EPvistaActual = "catalogo"
+        self._EPvistaActual = "inicio"
         self.EPconstruirCarrusel()
-        self.EPconstruirCatalogo()
+        self.EPconstruirDestacados()
 
     def EPconstruirCarrusel(self):
         EPcontenedor = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
@@ -188,6 +200,56 @@ class EPPanelInvitado:
         EPrutasCarrusel = [EPrutaAsset("carrusel", EParchivo) for EParchivo in EPARCHIVOS_CARRUSEL]
         self.EPcarrusel = EPCarruselSuave(EPcontenedor, EPrutasCarrusel, EPancho=1120, EPalto=320)
         self.EPcarrusel.pack()
+
+    #muestra unos pocos productos (los primeros 8 que devuelva la base de
+    #datos) como adelanto, con un boton para ir al catalogo completo. no
+    #tiene auto-refresco ni filtros propios, es solo una vitrina de portada
+    def EPconstruirDestacados(self):
+        EPmarco = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
+        EPmarco.pack(fill="both", expand=True, padx=40, pady=(0, 20))
+
+        EPfilaTitulo = tk.Frame(EPmarco, bg=EPCOLOR_FONDO)
+        EPfilaTitulo.pack(fill="x", pady=(0, 10))
+        tk.Label(
+            EPfilaTitulo, text="Destacados", bg=EPCOLOR_FONDO, fg=EPCOLOR_TEXTO,
+            font=("Arial", 16, "bold")
+        ).pack(side="left")
+        EPBotonRedondeado(
+            EPfilaTitulo, "Ver catalogo completo", self.EPirACatalogo,
+            EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=200, EPalto=34
+        ).pack(side="right")
+
+        #mismo patron canvas + scrollbar que el catalogo, para que
+        #destacados tambien pueda hacer scroll si la ventana es chica
+        EPcanvasDestacados = tk.Canvas(EPmarco, bg=EPCOLOR_FONDO, highlightthickness=0)
+        EPscrollbarDestacados = tk.Scrollbar(EPmarco, orient="vertical", command=EPcanvasDestacados.yview)
+        EPframeDestacados = tk.Frame(EPcanvasDestacados, bg=EPCOLOR_FONDO)
+
+        EPframeDestacados.bind(
+            "<Configure>", lambda e: EPcanvasDestacados.configure(scrollregion=EPcanvasDestacados.bbox("all"))
+        )
+        EPventanaCanvasDestacados = EPcanvasDestacados.create_window((0, 0), window=EPframeDestacados, anchor="nw")
+        EPcanvasDestacados.bind("<Configure>", lambda e: EPcanvasDestacados.itemconfig(EPventanaCanvasDestacados, width=e.width))
+        EPcanvasDestacados.configure(yscrollcommand=EPscrollbarDestacados.set)
+
+        EPcanvasDestacados.pack(side="left", fill="both", expand=True)
+        EPscrollbarDestacados.pack(side="right", fill="y")
+        EPactivarScrollCanvas(self.EPraiz, EPcanvasDestacados)
+
+        self.EPimagenesProductosTk = []
+        EPproductos = self.EPobtenerProductos()[:8]
+        EPcolumnas = 4
+        for EPindice, EPproducto in enumerate(EPproductos):
+            EPfila, EPcolumna = divmod(EPindice, EPcolumnas)
+            self.EPcrearTarjetaProductoEn(EPframeDestacados, EPproducto, EPfila, EPcolumna)
+
+    #seccion: CATALOGO completo. sin carrusel, directo la cuadricula de
+    #productos con los chips de categoria y el buscador. aqui es donde de
+    #verdad se navega y se busca lo que se quiere comprar
+    def EPmostrarCatalogo(self):
+        self.EPlimpiarVista()
+        self._EPvistaActual = "catalogo"
+        self.EPconstruirCatalogo()
 
     def EPconstruirCatalogo(self):
         self.EPmarcoCatalogo = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_FONDO)
@@ -220,17 +282,8 @@ class EPPanelInvitado:
 
         #el scroll con la rueda del mouse solo se activa mientras el mouse esta
         #encima del catalogo, para no interferir con otras ventanas abiertas
-        def EPscrollMouse(EPevento):
-            EPcanvas.yview_scroll(int(-1 * (EPevento.delta / 120)), "units")
+        EPactivarScrollCanvas(self.EPraiz, EPcanvas)
 
-        def EPactivarScroll(EPevento):
-            EPcanvas.bind_all("<MouseWheel>", EPscrollMouse)
-
-        def EPdesactivarScroll(EPevento):
-            EPcanvas.unbind_all("<MouseWheel>")
-
-        EPcanvas.bind("<Enter>", EPactivarScroll)
-        EPcanvas.bind("<Leave>", EPdesactivarScroll)
         self.EPimagenesProductosTk = []
         #_EPactivoRefresco se reactiva aqui porque EPlimpiarVista lo apaga
         #cada vez que se sale de esta seccion (a promociones o al detalle)
@@ -427,7 +480,7 @@ class EPPanelInvitado:
     def EPabrirCarrito(self):
         EPventana = tk.Toplevel(self.EPraiz)
         EPventana.title("Tu carrito")
-        EPventana.geometry("420x480")
+        EPcentrarVentana(EPventana, 420, 480)
         EPventana.configure(bg=EPCOLOR_FONDO)
 
         tk.Label(
@@ -663,15 +716,22 @@ class EPPanelInvitado:
         EPvistaDeOrigen = self._EPvistaActual
         self.EPlimpiarVista()
         self._EPvistaActual = "detalle"
+        #diccionario en vez de un if/else encadenado: si algun dia se agrega
+        #una cuarta seccion desde la que se pueda abrir el detalle, solo hay
+        #que agregar una linea aqui, no tocar mas nada
+        EPvistasDeVuelta = {
+            "inicio": self.EPmostrarInicio,
+            "catalogo": self.EPmostrarCatalogo,
+            "promociones": self.EPmostrarPromociones,
+        }
+        EPvolverA = EPvistasDeVuelta.get(EPvistaDeOrigen, self.EPmostrarInicio)
         #se guarda en self, no en una variable local: si nadie la referencia
         #despues de este metodo, Python podria recolectar el objeto (y con
         #el, la imagen de la foto que tiene cargada) aunque el widget siga
         #visible en pantalla
         self.EPtarjetaDetalleActual = EPTarjetaDetalleProducto(
             self.EPcontenedorVista, EPproducto, self.EPagregarAlCarrito,
-            EPalRegresar=lambda: (
-                self.EPmostrarCatalogo() if EPvistaDeOrigen != "promociones" else self.EPmostrarPromociones()
-            )
+            EPalRegresar=EPvolverA
         )
 
     def EPalCerrarVentana(self):
@@ -825,7 +885,7 @@ class EPVentanaPerfil:
 
         self.EPventana = tk.Toplevel(EPpadre)
         self.EPventana.title("Mi perfil")
-        self.EPventana.geometry("420x600+280+70")
+        EPcentrarVentana(self.EPventana, 420, 600)
         self.EPventana.configure(bg=EPCOLOR_FONDO)
         self.EPventana.resizable(False, False)
         #modal: mientras esta abierta, no se puede interactuar con la vitrina
