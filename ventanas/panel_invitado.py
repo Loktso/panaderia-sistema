@@ -157,6 +157,13 @@ class EPPanelInvitado:
         if self._EPtimerRedimension:
             self.EPraiz.after_cancel(self._EPtimerRedimension)
             self._EPtimerRedimension = None
+        #quitamos el scroll global de la rueda del mouse aqui, sin importar
+        #de que vista venimos. no podemos confiar en que el evento <Leave>
+        #del catalogo se alcance a disparar antes de destruir sus widgets
+        #(si el clic que cambia de vista pasa con el mouse todavia encima,
+        #<Leave> nunca llega, y el binding se queda apuntando a un canvas
+        #que ya no existe, dando "invalid command name" al mover la rueda)
+        self.EPraiz.unbind_all("<MouseWheel>")
         for EPwidget in self.EPcontenedorVista.winfo_children():
             EPwidget.destroy()
 
@@ -315,17 +322,20 @@ class EPPanelInvitado:
 
     # ---------- carrito ----------
 
-    def EPagregarAlCarrito(self, EPproducto):
+    #EPcantidad por defecto es 1 para no romper las tarjetas chicas del
+    #catalogo (que siguen agregando de una en una); la tarjeta de detalle
+    #es la unica que manda una cantidad distinta, la que el cliente eligio
+    def EPagregarAlCarrito(self, EPproducto, EPcantidad=1):
         for EPitem in self.EPcarrito:
             if EPitem["id_producto"] == EPproducto["id_producto"]:
-                EPitem["cantidad"] += 1
+                EPitem["cantidad"] += EPcantidad
                 break
         else:
             self.EPcarrito.append({
                 "id_producto": EPproducto["id_producto"],
                 "nombre": EPproducto["nombre"],
                 "precio": float(EPproducto["precio_actual"]),
-                "cantidad": 1,
+                "cantidad": EPcantidad,
             })
         self.EPbotonCarrito.EPactualizarBadge(sum(EPitem["cantidad"] for EPitem in self.EPcarrito))
 
@@ -611,6 +621,9 @@ class EPTarjetaDetalleProducto:
             self.EPfotos = [None]
         self.EPindiceFoto = 0
         self.EPfotoActualTk = None
+        #cantidad que el cliente quiere agregar, solo existe aqui en la
+        #tarjeta de detalle, no en las tarjetas chicas del catalogo
+        self.EPcantidadSeleccionada = tk.IntVar(value=1)
 
         self.EPconstruir()
 
@@ -662,10 +675,42 @@ class EPTarjetaDetalleProducto:
             fg=EPCOLOR_BOTON_PRIMARIO, font=("Arial", 16, "bold")
         ).pack(pady=(0, 15))
 
+        #selector de cantidad: menos, numero actual, mas. nunca baja de 1
+        EPfilaCantidad = tk.Frame(EPtarjeta, bg=EPCOLOR_TARJETA)
+        EPfilaCantidad.pack(pady=(0, 15))
+
         EPBotonRedondeado(
-            EPtarjeta, "Agregar al carrito", lambda: self.EPalAgregarCarrito(self.EPproducto),
+            EPfilaCantidad, "-", self.EPrestarCantidad,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=38, EPalto=38, EPradio=19
+        ).pack(side="left", padx=(0, 12))
+
+        self.EPlabelCantidad = tk.Label(
+            EPfilaCantidad, textvariable=self.EPcantidadSeleccionada, bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 13, "bold"), width=3, anchor="center"
+        )
+        self.EPlabelCantidad.pack(side="left")
+
+        EPBotonRedondeado(
+            EPfilaCantidad, "+", self.EPsumarCantidad,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=38, EPalto=38, EPradio=19
+        ).pack(side="left", padx=(12, 0))
+
+        EPBotonRedondeado(
+            EPtarjeta, "Agregar al carrito", self.EPconfirmarAgregar,
             EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=240, EPalto=42
         ).pack()
+
+    #suma o resta a la cantidad elegida, sin dejar que baje de 1
+    def EPsumarCantidad(self):
+        self.EPcantidadSeleccionada.set(self.EPcantidadSeleccionada.get() + 1)
+
+    def EPrestarCantidad(self):
+        if self.EPcantidadSeleccionada.get() > 1:
+            self.EPcantidadSeleccionada.set(self.EPcantidadSeleccionada.get() - 1)
+
+    #agrega al carrito la cantidad que el cliente eligio, no siempre 1
+    def EPconfirmarAgregar(self):
+        self.EPalAgregarCarrito(self.EPproducto, self.EPcantidadSeleccionada.get())
 
     #las fotos van EN BUCLE: despues de la ultima vuelve a la primera, y
     #antes de la primera va a la ultima, nunca se traba en ningun extremo

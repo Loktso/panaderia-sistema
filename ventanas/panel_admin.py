@@ -36,6 +36,10 @@ class EPBotonRedondeado(tk.Canvas):
         self.EPancho = EPancho
         self.EPalto = EPalto
         self.EPradio = EPradio
+        #bloqueo de doble clic: si el usuario hace clic dos veces muy rapido
+        #(por ejemplo en "Registrar Nuevo"), sin esto se ejecutaria el comando
+        #dos veces y podria duplicar un registro en la base de datos
+        self._EPbloqueado = False
         self.EPdibujar(EPtexto)
         self.bind("<Button-1>", self.EPalHacerClic)
         self.bind("<Enter>", self.EPalEntrarMouse)
@@ -59,10 +63,21 @@ class EPBotonRedondeado(tk.Canvas):
         ]
         self.create_polygon(EPpuntos, smooth=True, fill=self.EPcolorFondo, outline=self.EPcolorFondo)
         self.create_text(self.EPancho / 2, self.EPalto / 2, text=EPtexto, fill="white", font=("Arial", 10, "bold"))
-    #cuando le hacen clic, ejecuta la funcion que le pasamos al crearlo
+    #cuando le hacen clic, ejecuta la funcion que le pasamos al crearlo, pero
+    #solo si no esta bloqueado. se bloquea de inmediato, corre el comando, y
+    #se desbloquea solo despues de una pequena espera (evita el doble clic
+    #accidental sin que cada pantalla tenga que resolver esto por su cuenta)
     def EPalHacerClic(self, EPevento):
-        if self.EPcomando:
-            self.EPcomando()
+        if self._EPbloqueado:
+            return
+        self._EPbloqueado = True
+        try:
+            if self.EPcomando:
+                self.EPcomando()
+        finally:
+            self.after(400, self.EPdesbloquear)
+    def EPdesbloquear(self):
+        self._EPbloqueado = False
     #cambia el cursor a manita cuando el mouse pasa por encima, se ve mas interactivo
     def EPalEntrarMouse(self, EPevento):
         self.config(cursor="hand2")

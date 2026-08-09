@@ -35,13 +35,26 @@ class EPBotonImagen(tk.Canvas):
         self.EPimagenHover = ImageTk.PhotoImage(EPimagenHoverPil)
 
         self.EPitemImagen = self.create_image(EPancho / 2, EPalto / 2, image=self.EPimagenNormal)
+        #mismo bloqueo de doble clic que EPBotonRedondeado, para que ningun
+        #boton de la app (con texto o con imagen) pueda disparar su accion
+        #dos veces por un clic doble accidental
+        self._EPbloqueado = False
         self.bind("<Button-1>", self._EPalHacerClic)
         self.bind("<Enter>", self._EPalEntrarMouse)
         self.bind("<Leave>", self._EPalSalirMouse)
 
     def _EPalHacerClic(self, EPevento):
-        if self.EPcomando:
-            self.EPcomando()
+        if self._EPbloqueado:
+            return
+        self._EPbloqueado = True
+        try:
+            if self.EPcomando:
+                self.EPcomando()
+        finally:
+            self.after(400, self._EPdesbloquear)
+
+    def _EPdesbloquear(self):
+        self._EPbloqueado = False
 
     def _EPalEntrarMouse(self, EPevento):
         self.config(cursor="hand2")
