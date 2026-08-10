@@ -546,13 +546,21 @@ class EPPanelInvitado:
             )
             return
 
-        #ya validado todo, registramos cada venta y descontamos de la produccion del dia
+        #ya validado todo, registramos cada venta y descontamos de la produccion del dia.
+        #importante: EPitem["precio"] ya es precio_actual, que si el producto
+        #esta en promocion YA viene rebajado (la promocion es una bajada real
+        #de precio, no un descuento aparte). por eso el total se calcula
+        #directo cantidad*precio, SIN volver a aplicarle el porcentaje de
+        #promocion encima (eso si cobraria doble descuento). el porcentaje
+        #solo se GUARDA en la venta como dato informativo, para reportes y
+        #para que la factura pueda decir "esta compra tuvo promocion"
         EPtotalCompra = 0
         for EPitem in self.EPcarrito:
-            EPtotalItem = cp.EPcalcularTotalConDescuentos(EPitem["cantidad"], EPitem["precio"], 0, 0)
+            EPporcentajePromo = self.EPobtenerPorcentajePromocion(EPitem["id_producto"])
+            EPtotalItem = round(EPitem["cantidad"] * EPitem["precio"], 2)
             bd.EPregistrarVenta(
                 EPitem["id_producto"], self.EPusuario.EPidUsuario, EPitem["cantidad"],
-                EPitem["precio"], 0, 0, EPtotalItem
+                EPitem["precio"], EPporcentajePromo, 0, EPtotalItem
             )
             bd.EPactualizarVentaProduccion(EPitem["id_producto"], EPhoy, EPitem["cantidad"])
             EPtotalCompra += EPtotalItem
@@ -694,6 +702,20 @@ class EPPanelInvitado:
     #revisa, producto por producto, si su ultimo cambio de precio registrado
     #en historial_precios fue negativo (bajo de precio). usa el mismo bd que
     #ya tenias, no crea tablas nuevas ni datos falsos
+    #version de EPobtenerProductosEnPromocion pero para UN producto especifico,
+    #devuelve el porcentaje positivo de descuento (o 0 si no esta en promo).
+    #se usa al momento de registrar la venta, para guardar ese dato
+    def EPobtenerPorcentajePromocion(self, EPidProducto):
+        if bd is None:
+            return 0
+        try:
+            EPhistorial = bd.EPobtenerHistorialPrecios(EPidProducto)
+            if EPhistorial and float(EPhistorial[-1]["porcentaje_cambio"]) < 0:
+                return abs(float(EPhistorial[-1]["porcentaje_cambio"]))
+        except Exception:
+            pass
+        return 0
+
     def EPobtenerProductosEnPromocion(self):
         if bd is None:
             return []
