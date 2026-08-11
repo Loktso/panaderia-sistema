@@ -9,6 +9,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 #importamos nuestros propios archivos para poder usar sus funciones aqui
 import base_datos as bd
 import modelos as md
+import conexiones_externas as ce
+import verificacion_correo as vc
 
 #los colores y el boton redondeado son los mismos que usa todo el resto del
 #sistema (panel_admin.py, panel_vendedor.py, la vitrina), asi el login ya
@@ -88,10 +90,6 @@ class EPVentanaLogin:
             EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=36
         ).pack(pady=(10, 4))
         EPBotonRedondeado(
-            EPtarjeta, "Ingresar con Facebook", self.EPloginFacebook,
-            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=36
-        ).pack(pady=4)
-        EPBotonRedondeado(
             EPtarjeta, "Continuar como Invitado", self.EPentrarComoInvitado,
             EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=260, EPalto=36
         ).pack(pady=(14, 4))
@@ -110,16 +108,65 @@ class EPVentanaLogin:
         if EPdatosUsuario is None:
             messagebox.showerror("Error", "Correo o contrasena incorrectos")
             return
+
+        #si la cuenta es de registro manual y todavia no confirmo el codigo
+        #que le mandamos, no la dejamos entrar -- pero le damos la opcion
+        #de mandarle un codigo nuevo ahi mismo, en vez de solo bloquearla
+        if not EPdatosUsuario["correo_verificado"]:
+            EPquiereVerificar = messagebox.askyesno(
+                "Correo sin verificar",
+                "Todavia no verificaste tu correo. ¿Quieres que te enviemos un codigo nuevo ahora?"
+            )
+            if EPquiereVerificar:
+                EPcodigo = bd.EPgenerarYGuardarCodigoVerificacion(EPdatosUsuario["id_usuario"])
+                vc.EPenviarCorreoVerificacion(EPdatosUsuario["correo"], EPdatosUsuario["nombre"], EPcodigo)
+                self.EPmostrarVerificacion(EPdatosUsuario["id_usuario"], EPdatosUsuario["correo"], EPdatosUsuario["nombre"])
+            return
+
         self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPdatosUsuario)
         messagebox.showinfo("Bienvenido", self.EPusuarioAutenticado.EPmostrarInformacion())
         self.EPraiz.destroy()
 
     #por ahora estas solo avisan que la funcion no esta lista todavia
+    #el login real bloquea la ventana mientras espera la respuesta del
+    #navegador (puede tardar hasta 2 minutos si la persona se demora en
+    #loguearse ahi). por eso avisamos ANTES de que se "congele", para que
+    #no parezca que la app se trabo -- es un comportamiento esperado, no
+    #un error
     def EPloginGoogle(self):
-        messagebox.showinfo("Proximamente", "Login con Google estara disponible pronto")
+        messagebox.showinfo(
+            "Se va a abrir tu navegador",
+            "Inicia sesion con tu cuenta de Google en la pestana que se va a abrir. "
+            "Cuando termines, vuelve a esta ventana."
+        )
+        EPdatosGoogle = ce.EPiniciarSesionGoogle()
+        self.EPcontinuarLoginExterno(EPdatosGoogle, "google")
 
-    def EPloginFacebook(self):
-        messagebox.showinfo("Proximamente", "Login con Facebook estara disponible pronto")
+    #logica compartida con el login local: si el proveedor nos devolvio
+    #nombre+correo, buscamos si esa persona ya tiene cuenta en NUESTRA base
+    #de datos; si no tiene, se la creamos automaticamente como cliente (sin
+    #contrasena, bd.EPcrearUsuario ya sabe dejarla vacia para estos casos)
+    def EPcontinuarLoginExterno(self, EPdatosProveedor, EPnombreProveedor):
+        if EPdatosProveedor is None:
+            messagebox.showerror(
+                "No se pudo iniciar sesion",
+                f"No se pudo completar el login con {EPnombreProveedor.capitalize()}. Intenta de nuevo."
+            )
+            return
+
+        EPusuario = bd.EPobtenerUsuarioPorCorreo(EPdatosProveedor["correo"])
+        if EPusuario is None:
+            #google ya verifico este correo de su lado, no tiene sentido
+            #pedirle otro codigo aparte -- lo creamos ya verificado
+            bd.EPcrearUsuario(
+                EPdatosProveedor["nombre"], EPdatosProveedor["correo"], None,
+                None, None, "cliente", EPnombreProveedor, True
+            )
+            EPusuario = bd.EPobtenerUsuarioPorCorreo(EPdatosProveedor["correo"])
+
+        self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPusuario)
+        messagebox.showinfo("Bienvenido", self.EPusuarioAutenticado.EPmostrarInformacion())
+        self.EPraiz.destroy()
 
     def EPentrarComoInvitado(self):
         self.EPusuarioAutenticado = md.EPInvitado()
@@ -182,13 +229,91 @@ class EPVentanaLogin:
             return
 
         bd.EPcrearUsuario(EPnombre, EPcorreo, EPpassword, EPtelefono, EPdireccion, "cliente", "local")
-
-        #dejamos al cliente automaticamente logueado, sin pedirle que vuelva a escribir sus datos
         EPdatosNuevoUsuario = bd.EPobtenerUsuarioPorCorreo(EPcorreo)
-        self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPdatosNuevoUsuario)
 
-        messagebox.showinfo("Cuenta creada", f"Bienvenido/a {EPnombre}, tu cuenta se creo correctamente")
+        #la cuenta se crea SIN verificar (correo_verificado=False por
+        #defecto en bd.EPcrearUsuario). le mandamos el codigo y la pasamos
+        #a la vista de verificacion, todavia no queda logueada
+        EPcodigo = bd.EPgenerarYGuardarCodigoVerificacion(EPdatosNuevoUsuario["id_usuario"])
+        EPenviado = vc.EPenviarCorreoVerificacion(EPcorreo, EPnombre, EPcodigo)
+        if not EPenviado:
+            messagebox.showwarning(
+                "No se pudo enviar el correo",
+                "Tu cuenta se creo, pero no pudimos enviarte el codigo por correo ahora mismo. "
+                "Puedes intentar reenviarlo desde la siguiente pantalla."
+            )
+
+        self.EPmostrarVerificacion(EPdatosNuevoUsuario["id_usuario"], EPcorreo, EPnombre)
+
+    # ---------- vista: verificar codigo de correo ----------
+    # aparece justo despues de registrarse, y tambien si alguien intenta
+    # loguearse con una cuenta que nunca termino de verificar
+
+    def EPmostrarVerificacion(self, EPidUsuario, EPcorreo, EPnombre):
+        self.EPidUsuarioPendienteVerificacion = EPidUsuario
+        self.EPcorreoPendienteVerificacion = EPcorreo
+        self.EPnombrePendienteVerificacion = EPnombre
+
+        self.EPlimpiarVista()
+        EPtarjeta = tk.Frame(self.EPcontenedorVista, bg=EPCOLOR_TARJETA, padx=25, pady=25)
+        EPtarjeta.pack(padx=30, pady=30, fill="both", expand=True)
+
+        tk.Label(
+            EPtarjeta, text="Verifica tu correo", bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO,
+            font=("Arial", 14, "bold")
+        ).pack(pady=(0, 10))
+        tk.Label(
+            EPtarjeta, text=f"Te enviamos un codigo de 6 digitos a:\n{EPcorreo}\n(vence en 15 minutos)",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 10), justify="center"
+        ).pack(pady=(0, 15))
+
+        self.EPcodigoEntry = self.EPcrearCampo(EPtarjeta, "Codigo de verificacion")
+
+        EPBotonRedondeado(
+            EPtarjeta, "Verificar", self.EPconfirmarCodigo,
+            EPcolorFondo=EPCOLOR_BOTON_EXITO, EPancho=260, EPalto=40
+        ).pack(pady=(18, 8))
+        EPBotonRedondeado(
+            EPtarjeta, "Reenviar codigo", self.EPreenviarCodigo,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=34
+        ).pack(pady=4)
+        EPBotonRedondeado(
+            EPtarjeta, "Volver a Iniciar Sesion", self.EPmostrarLogin,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=260, EPalto=34
+        ).pack(pady=(4, 15))
+
+    #compara el codigo escrito contra el guardado. si es correcto, ya deja
+    #a la persona logueada de una vez (no la hace volver a iniciar sesion)
+    def EPconfirmarCodigo(self):
+        EPcodigo = self.EPcodigoEntry.get().strip()
+        if EPcodigo == "":
+            messagebox.showwarning("Campo vacio", "Escribe el codigo que te llego por correo")
+            return
+
+        EPvalido = bd.EPverificarCodigo(self.EPidUsuarioPendienteVerificacion, EPcodigo)
+        if not EPvalido:
+            messagebox.showerror(
+                "Codigo incorrecto",
+                "El codigo esta mal escrito o ya vencio. Puedes pedir uno nuevo con 'Reenviar codigo'"
+            )
+            return
+
+        EPdatosUsuario = bd.EPobtenerUsuarioPorId(self.EPidUsuarioPendienteVerificacion)
+        self.EPusuarioAutenticado = md.EPcrearUsuarioDesdeRol(EPdatosUsuario)
+        messagebox.showinfo("Correo verificado", self.EPusuarioAutenticado.EPmostrarInformacion())
         self.EPraiz.destroy()
+
+    #genera un codigo nuevo y lo manda otra vez, por si el primero vencio
+    #o nunca llego (carpeta de spam, error de conexion, etc)
+    def EPreenviarCodigo(self):
+        EPcodigo = bd.EPgenerarYGuardarCodigoVerificacion(self.EPidUsuarioPendienteVerificacion)
+        EPenviado = vc.EPenviarCorreoVerificacion(
+            self.EPcorreoPendienteVerificacion, self.EPnombrePendienteVerificacion, EPcodigo
+        )
+        if EPenviado:
+            messagebox.showinfo("Codigo reenviado", f"Te mandamos un codigo nuevo a {self.EPcorreoPendienteVerificacion}")
+        else:
+            messagebox.showerror("No se pudo enviar", "No pudimos enviar el correo. Revisa tu conexion e intenta de nuevo")
 
     # ---------- auxiliar compartido por las dos vistas ----------
 

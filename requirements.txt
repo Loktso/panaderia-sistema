@@ -19,7 +19,7 @@ bcrypt==4.2.1
 # --- Autenticación OAuth ---
 google-auth-oauthlib==1.2.1
 google-auth==2.36.0
-requests==2.32.3          # usado también para Facebook Graph API
+requests==2.32.3          # usado para las peticiones HTTP del login con Google
 
 # --- Gráficas embebidas en Tkinter ---
 matplotlib==3.11.1

@@ -20,7 +20,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import base_datos as bd
 import alertas as al
 import exportar_reportes as er
-from ventanas.componentes_ui import EPactivarScrollCanvas
 
 #los colores ya no se repiten aqui, se traen todos de estilos.py
 #asi si cambiamos un color, cambia en todo el sistema a la vez
@@ -123,16 +122,16 @@ def EPcrearFrameScrollable(EPpadre, EPfondo=EPCOLOR_TARJETA):
     EPcanvas.pack(side="left", fill="both", expand=True)
     EPscrollbar.pack(side="right", fill="y")
 
-    #el scroll con la rueda del mouse (o trackpad) ahora usa la misma
-    #funcion que ya arreglamos en la vitrina: EPactivarScrollCanvas, que
-    #reacciona al SIGNO del delta (no a su magnitud, que en un trackpad
-    #llega chiquito y antes se redondeaba a 0), suma <Button-4>/<Button-5>
-    #para que tambien funcione en Ubuntu, y queda activo de forma
-    #permanente en vez de depender de <Enter>/<Leave> del canvas (que no
-    #se disparaban de forma confiable con el formulario lleno de widgets).
-    #EPpadre.winfo_toplevel() encuentra la ventana Tk/Toplevel que contiene
-    #a este frame, sin importar en que archivo se haya llamado esta funcion
-    EPactivarScrollCanvas(EPpadre.winfo_toplevel(), EPcanvas)
+    #el scroll con la rueda del mouse solo se activa mientras el mouse esta
+    #encima de este frame, para no interferir con otros scrolls de la ventana
+    def EPscrollMouse(EPevento):
+        EPcanvas.yview_scroll(int(-1 * (EPevento.delta / 120)), "units")
+    def EPactivarScroll(EPevento):
+        EPcanvas.bind_all("<MouseWheel>", EPscrollMouse)
+    def EPdesactivarScroll(EPevento):
+        EPcanvas.unbind_all("<MouseWheel>")
+    EPcanvas.bind("<Enter>", EPactivarScroll)
+    EPcanvas.bind("<Leave>", EPdesactivarScroll)
 
     return EPcontenedor, EPframeInterno
 
@@ -756,7 +755,9 @@ class EPPanelUsuarios:
             messagebox.showwarning("Campos incompletos", "Nombre, correo y contrasena son obligatorios para registrar")
             return
         try:
-            bd.EPcrearUsuario(EPnombre, EPcorreo, EPpassword, EPtelefono, EPdireccion, EProl, "local")
+            #si lo crea el administrador a mano, no tiene sentido pedirle un
+            #codigo de verificacion por correo -- queda verificado de una vez
+            bd.EPcrearUsuario(EPnombre, EPcorreo, EPpassword, EPtelefono, EPdireccion, EProl, "local", True)
             messagebox.showinfo("Listo", "Usuario registrado correctamente")
             self.EPlimpiarFormulario()
             self.EPcargarUsuarios()

@@ -948,7 +948,7 @@ class EPVentanaPerfil:
         ).pack(pady=(12, 20))
 
         #el cambio de contrasena solo tiene sentido si entro con correo y
-        #contrasena local. si entro con google o facebook, no hay contrasena
+        #contrasena local. si entro con google, no hay contrasena
         #nuestra que cambiar (EPverificarCredenciales ni siquiera la usa)
         if getattr(self.EPusuario, "EPproveedorLogin", "local") == "local":
             tk.Label(

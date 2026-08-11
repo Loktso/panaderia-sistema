@@ -1,5 +1,7 @@
 #esta libreria nos deja conectarnos a mysql desde python
 import mysql.connector
+import datetime
+import random
 #esta libreria sirve para encriptar contrasenas, asi no se guardan como texto plano
 import bcrypt
 #traemos la configuracion que armamos en config.py
@@ -34,17 +36,21 @@ def EPverificarPassword(EPpasswordPlano, EPhashGuardado):
     return bcrypt.checkpw(EPpasswordPlano.encode("utf-8"), EPhashGuardado.encode("utf-8"))
 
 #esta funcion noos crea un usuario nuevo en la base de datos
-def EPcrearUsuario(EPnombre, EPcorreo, EPpasswordPlano, EPtelefono, EPdireccion, EProl, EPproveedorLogin):
+#EPcorreoVerificado default es False porque el caso mas comun es el
+#registro manual, que SI necesita el codigo de verificacion. quien llama
+#a esta funcion desde un lugar de confianza (login con google, o el admin
+#creando un usuario a mano) manda True explicitamente
+def EPcrearUsuario(EPnombre, EPcorreo, EPpasswordPlano, EPtelefono, EPdireccion, EProl, EPproveedorLogin, EPcorreoVerificado=False):
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor()
     #si viene una contrasena la encriptamos, si no (por ejemplo cuando se hace login con google) dejamos vacio
     EPpasswordHash = EPhashearPassword(EPpasswordPlano) if EPpasswordPlano else None
 
     EPquery = """
-        INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login, correo_verificado)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
-    EPvalores = (EPnombre, EPcorreo, EPpasswordHash, EPtelefono, EPdireccion, EProl, EPproveedorLogin)
+    EPvalores = (EPnombre, EPcorreo, EPpasswordHash, EPtelefono, EPdireccion, EProl, EPproveedorLogin, EPcorreoVerificado)
 
     EPcursor.execute(EPquery, EPvalores)
     EPconexion.commit()
@@ -54,7 +60,50 @@ def EPcrearUsuario(EPnombre, EPcorreo, EPpasswordPlano, EPtelefono, EPdireccion,
     EPconexion.close()
     return EPidNuevo
 
-#trae todos los usuarios activos de la base de datos
+#genera un codigo nuevo de 6 digitos, lo guarda con una expiracion de 15
+#minutos, y devuelve el codigo (para que quien llamo a esta funcion se lo
+#pueda pasar a verificacion_correo.py y mandarlo por correo). se usa tanto
+#para el primer codigo del registro como para "reenviar codigo"
+def EPgenerarYGuardarCodigoVerificacion(EPidUsuario):
+    EPcodigo = f"{random.randint(0, 999999):06d}"
+    EPexpira = datetime.datetime.now() + datetime.timedelta(minutes=15)
+
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor()
+    EPcursor.execute(
+        "UPDATE usuarios SET codigo_verificacion = %s, codigo_expira = %s WHERE id_usuario = %s",
+        (EPcodigo, EPexpira, EPidUsuario)
+    )
+    EPconexion.commit()
+    EPcursor.close()
+    EPconexion.close()
+    return EPcodigo
+
+#compara el codigo que la persona escribio contra el que se guardo. si
+#coincide y todavia no expiro, marca la cuenta como verificada y borra el
+#codigo (para que no se pueda reusar). devuelve True/False
+def EPverificarCodigo(EPidUsuario, EPcodigoIngresado):
+    EPusuario = EPobtenerUsuarioPorId(EPidUsuario)
+    if EPusuario is None or EPusuario["codigo_verificacion"] is None:
+        return False
+
+    if EPusuario["codigo_verificacion"] != EPcodigoIngresado:
+        return False
+
+    if EPusuario["codigo_expira"] is None or datetime.datetime.now() > EPusuario["codigo_expira"]:
+        return False
+
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor()
+    EPcursor.execute(
+        "UPDATE usuarios SET correo_verificado = 1, codigo_verificacion = NULL, codigo_expira = NULL WHERE id_usuario = %s",
+        (EPidUsuario,)
+    )
+    EPconexion.commit()
+    EPcursor.close()
+    EPconexion.close()
+    return True
+
 def EPobtenerUsuarios():
     EPconexion = EPconectar()
     #dictionary=True hace que cada fila venga como un diccionario, con nombres de columna incluidos
@@ -95,7 +144,7 @@ def EPverificarCredenciales(EPcorreo, EPpasswordPlano):
     if EPusuario is None:
         return None
 
-    #si el usuario entro con google o facebook, no tiene contrasena guardada aqui
+    #si el usuario entro con google, no tiene contrasena guardada aqui
     if EPusuario["password_hash"] is None:
         return None
 

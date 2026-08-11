@@ -28,6 +28,9 @@ CREATE TABLE usuarios (
     foto_ruta           VARCHAR(255)    NULL,   -- ruta local de la foto de perfil, opcional
     rol                 ENUM('administrador', 'vendedor', 'cliente') NOT NULL DEFAULT 'vendedor',
     proveedor_login     ENUM('local', 'google', 'facebook') NOT NULL DEFAULT 'local',
+    correo_verificado   TINYINT(1)      NOT NULL DEFAULT 0,   -- 0 = todavia no confirmo el codigo que le mandamos
+    codigo_verificacion VARCHAR(6)      NULL,                 -- codigo de 6 digitos pendiente, o NULL si no hay ninguno activo
+    codigo_expira       DATETIME        NULL,                 -- el codigo deja de servir despues de esta fecha/hora
     activo              TINYINT(1)      NOT NULL DEFAULT 1,
     fecha_registro      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -130,13 +133,13 @@ CREATE TABLE configuracion_alertas (
 -- usuario administrador de prueba
 -- contrasena en texto plano: Admin123!
 -- este hash se genero con bcrypt (bcrypt.hashpw) igual que lo hace base_datos.py
-INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login)
-VALUES ('Administrador Principal', 'admin@panaderia.com', '$2b$12$ygL.5R0X/gfBWxLr6gULbOhiAB3yfgesuGx85.KSBwQ/.8fudPnCC', NULL, NULL, 'administrador', 'local');
+INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login, correo_verificado)
+VALUES ('Administrador Principal', 'admin@panaderia.com', '$2b$12$ygL.5R0X/gfBWxLr6gULbOhiAB3yfgesuGx85.KSBwQ/.8fudPnCC', NULL, NULL, 'administrador', 'local', 1);
 
 -- usuario vendedor de prueba
 -- contrasena en texto plano: Vendedor123!
-INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login)
-VALUES ('Vendedor Principal', 'vendedor@panaderia.com', '$2b$12$cnmrgSSo4ws4VaskNVKk2eTtDJn1q2b0MyusePriEBarAj8WOcuru', NULL, NULL, 'vendedor', 'local');
+INSERT INTO usuarios (nombre, correo, password_hash, telefono, direccion, rol, proveedor_login, correo_verificado)
+VALUES ('Vendedor Principal', 'vendedor@panaderia.com', '$2b$12$cnmrgSSo4ws4VaskNVKk2eTtDJn1q2b0MyusePriEBarAj8WOcuru', NULL, NULL, 'vendedor', 'local', 1);
 
 -- Configuración de alertas por defecto
 INSERT INTO configuracion_alertas (umbral_porcentaje_sobrante, dias_consecutivos_alerta)

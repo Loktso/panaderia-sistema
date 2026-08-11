@@ -20,14 +20,15 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "panaderia_db")
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    #datos que se van a usar cuando programemos el login con google
+    #datos para el login con google (el unico proveedor externo que usa el proyecto)
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/callback")
-    #datos que se van a usar cuando programemos el login con facebook
-    FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "")
-    FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "")
-    FACEBOOK_REDIRECT_URI = os.getenv("FACEBOOK_REDIRECT_URI", "http://localhost:8080/callback")
+    #cuenta de gmail que manda los correos con el codigo de verificacion
+    #GMAIL_APP_PASSWORD NO es la contrasena normal de esa cuenta, es una
+    #"contrasena de aplicacion" de 16 caracteres, ver docs/instalacion.md
+    GMAIL_CORREO = os.getenv("GMAIL_CORREO", "")
+    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
     #datos generales del proyecto, no dependen del archivo .env
     APP_ENV = os.getenv("APP_ENV", "development")
     APP_NAME = "Sistema de Gestion - Panaderia"
