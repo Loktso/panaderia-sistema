@@ -465,6 +465,27 @@ def EPobtenerVentasDetalladas(EPfechaInicio, EPfechaFin):
     EPconexion.close()
     return EPresultado
 
+#trae las ventas de un usuario especifico dentro de un rango de fechas, con
+#el nombre del producto ya resuelto via join. se usa en "mis ventas y
+#reportes" del panel de vendedor, para ver solo lo que el vendedor mismo
+#registro en mostrador (no lo que compraron los clientes desde la vitrina)
+def EPobtenerVentasPorUsuarioDetalladas(EPidUsuario, EPfechaInicio, EPfechaFin):
+    EPconexion = EPconectar()
+    EPcursor = EPconexion.cursor(dictionary=True)
+    EPquery = """
+        SELECT v.id_venta, v.cantidad, v.precio_unitario, v.total, v.fecha_hora,
+               p.nombre AS nombre_producto
+        FROM ventas v
+        JOIN productos p ON p.id_producto = v.id_producto
+        WHERE v.id_usuario = %s AND DATE(v.fecha_hora) BETWEEN %s AND %s
+        ORDER BY v.fecha_hora DESC
+    """
+    EPcursor.execute(EPquery, (EPidUsuario, EPfechaInicio, EPfechaFin))
+    EPresultado = EPcursor.fetchall()
+    EPcursor.close()
+    EPconexion.close()
+    return EPresultado
+
 #trae solo las ventas hechas por un vendedor especifico
 def EPobtenerVentasPorUsuario(EPidUsuario):
     EPconexion = EPconectar()
