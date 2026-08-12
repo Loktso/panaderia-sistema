@@ -7,7 +7,7 @@ from estilos import EPcargarImagenPil, EPgenerarPlaceholder, EPCOLORES_PLACEHOLD
 
 class EPBotonImagen(tk.Canvas):
     def __init__(self, EPpadre,EPrutaImagen,EPcomando=None, EPancho=60, EPalto=60,
-                 EPtextoPlaceholder="", EPcolorPlaceholder=None, EPcolorFondo=None, **EPkwargs):
+                 EPtextoPlaceholder="", EPcolorPlaceholder=None,EPcolorFondo=None, **EPkwargs):
         EPcolorFondo = EPcolorFondo if EPcolorFondo is not None else EPpadre["bg"]
         super().__init__(EPpadre,width=EPancho,height=EPalto,bg=EPcolorFondo,highlightthickness=0,**EPkwargs)
         self.EPcomando= EPcomando
