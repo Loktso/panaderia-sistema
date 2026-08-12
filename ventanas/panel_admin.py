@@ -53,7 +53,7 @@ class EPBotonRedondeado(tk.Canvas):
             0, 0]
         self.create_polygon(EPpuntos,smooth=True,fill=self.EPcolorFondo,outline=self.EPcolorFondo)
         self.create_text(self.EPancho/2,self.EPalto / 2, text=EPtexto, fill="white",font=("Arial",10,"bold"))
-    def EPalHacerClic(self):
+    def EPalHacerClic(self, EPevento=None):
         if self._EPbloqueado:
             return
         self._EPbloqueado =True

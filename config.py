@@ -15,6 +15,8 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "panaderia_db")
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    DB_SSL_CA_TEXTO = os.getenv("DB_SSL_CA", "")
+    DB_SSL_CA = str(EPbaseDir / DB_SSL_CA_TEXTO) if DB_SSL_CA_TEXTO else ""
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/callback")

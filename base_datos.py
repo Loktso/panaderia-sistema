@@ -10,14 +10,20 @@ from config import Config
 import calculadora_porcentajes as cp
 
 def EPconectar():
-    EPconexion = mysql.connector.connect(
-        host=Config.DB_HOST,
-        port=Config.DB_PORT,
-        database=Config.DB_NAME,
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        charset="utf8mb4",
-        use_unicode=True)
+    EPargumentos = {
+        "host": Config.DB_HOST,
+        "port": Config.DB_PORT,
+        "database": Config.DB_NAME,
+        "user": Config.DB_USER,
+        "password": Config.DB_PASSWORD,
+        "charset": "utf8mb4",
+        "use_unicode": True,
+    }
+    #si hay un certificado configurado (por ejemplo para Aiven), lo usamos para conectar por SSL
+    if Config.DB_SSL_CA:
+        EPargumentos["ssl_ca"] = Config.DB_SSL_CA
+        EPargumentos["ssl_verify_cert"] = True
+    EPconexion = mysql.connector.connect(**EPargumentos)
     return EPconexion
 def EPhashearPassword(EPpasswordPlano):
     EPsalt = bcrypt.gensalt()
