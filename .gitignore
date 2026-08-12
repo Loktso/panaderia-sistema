@@ -8,10 +8,6 @@ __pycache__/
 .env
 config_local.py
 
-# Base de datos local (modo offline)
-offline/*.db
-offline/*.sqlite3
-
 # Logs
 *.log
 

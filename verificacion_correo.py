@@ -1,37 +1,20 @@
-#este archivo se encarga de mandar el correo con el codigo de verificacion
-#de 6 digitos cuando alguien se registra manualmente (correo + contrasena).
-#usa smtplib, que es parte de la libreria estandar de python, no hay que
-#instalar nada nuevo. se conecta al servidor SMTP de gmail con una
-#"contrasena de aplicacion" (no la contrasena normal de la cuenta, gmail
-#bloquea el envio automatico con esa por seguridad)
-
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 from config import Config
-
 EPSERVIDOR_SMTP = "smtp.gmail.com"
 EPPUERTO_SMTP = 587
-
-
-#arma y manda el correo con el codigo. devuelve True si se mando bien,
-#False si algo fallo (por ejemplo si GMAIL_CORREO/GMAIL_APP_PASSWORD estan
-#vacios en el .env, o no hay internet en ese momento)
 def EPenviarCorreoVerificacion(EPcorreoDestino, EPnombre, EPcodigo):
     if not Config.GMAIL_CORREO or not Config.GMAIL_APP_PASSWORD:
         return False
-
     EPmensaje = MIMEMultipart("alternative")
     EPmensaje["Subject"] = "Tu codigo de verificacion - Panaderia"
     EPmensaje["From"] = Config.GMAIL_CORREO
     EPmensaje["To"] = EPcorreoDestino
-
     EPtextoPlano = (
         f"Hola {EPnombre},\n\n"
         f"Tu codigo de verificacion es: {EPcodigo}\n\n"
-        f"Este codigo vence en 15 minutos. Si tu no pediste este codigo, puedes ignorar este correo."
-    )
+        f"Este codigo vence en 15 minutos. Si tu no pediste este codigo, puedes ignorar este correo.")
     EPtextoHtml = f"""
     <html>
       <body style="font-family: sans-serif; text-align: center; padding: 30px;">
@@ -43,10 +26,8 @@ def EPenviarCorreoVerificacion(EPcorreoDestino, EPnombre, EPcodigo):
       </body>
     </html>
     """
-
     EPmensaje.attach(MIMEText(EPtextoPlano, "plain"))
     EPmensaje.attach(MIMEText(EPtextoHtml, "html"))
-
     try:
         with smtplib.SMTP(EPSERVIDOR_SMTP, EPPUERTO_SMTP) as EPservidor:
             EPservidor.starttls()
@@ -54,7 +35,4 @@ def EPenviarCorreoVerificacion(EPcorreoDestino, EPnombre, EPcodigo):
             EPservidor.sendmail(Config.GMAIL_CORREO, EPcorreoDestino, EPmensaje.as_string())
         return True
     except Exception:
-        #si algo fallo (credenciales invalidas, sin internet, gmail rechazo
-        #el envio, etc), devolvemos False en vez de tumbar toda la app.
-        #quien llamo a esta funcion decide que mostrarle a la persona
         return False
