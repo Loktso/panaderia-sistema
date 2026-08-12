@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) #bu
 import base_datos as bd
 import alertas as al
 import exportar_reportes as er
+import calculadora_porcentajes as cp
 from estilos import (
     EPCOLOR_FONDO, EPCOLOR_HEADER, EPCOLOR_TARJETA, EPCOLOR_TEXTO,
     EPCOLOR_BOTON_PRIMARIO, EPCOLOR_BOTON_EXITO, EPCOLOR_BOTON_PELIGRO, EPCOLOR_BOTON_NEUTRO,
@@ -123,10 +124,10 @@ class EPPanelAdmin:
     def __init__(self, EPraiz):
         self.EPraiz =EPraiz
         self.EPraiz.title("Panaderia - Administracion")
-        EPcentrarVentana(self.EPraiz,1200, 650)
-        self.EPraiz.minsize(1000, 500)
+        EPcentrarVentana(self.EPraiz,1500, 650)
+        self.EPraiz.minsize(1500, 500)
         self.EPraiz.configure(bg=EPCOLOR_FONDO)
-        self.EPraiz.minsize(900,500)
+        self.EPraiz.minsize(1500,500)
         self.EPconstruirHeader()
         self.EPcontenedorVista=tk.Frame(self.EPraiz,bg=EPCOLOR_FONDO)
         self.EPcontenedorVista.pack(fill="both",expand=True)
@@ -143,6 +144,9 @@ class EPPanelAdmin:
         EPBotonRedondeado(EPbotonesFrame,"Cerrar sesion",self.EPcerrarSesion,
             EPcolorFondo=EPCOLOR_BOTON_PELIGRO, EPancho=130, EPalto=34).pack(side="right", padx=(15,0))
         EPBotonRedondeado(EPbotonesFrame, "Reportes",self.EPmostrarReportes,
+            EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=170, EPalto=34).pack(side="right", padx=5)
+        EPBotonRedondeado(
+            EPbotonesFrame, "Calculadora", self.EPmostrarCalculadora,
             EPcolorFondo=EPCOLOR_BOTON_NEUTRO, EPancho=170, EPalto=34).pack(side="right", padx=5)
         EPBotonRedondeado(
             EPbotonesFrame, "Alertas", self.EPmostrarAlertas,
@@ -172,6 +176,10 @@ class EPPanelAdmin:
         self.EPlimpiarVista()
         self.EPetiquetaTitulo.config(text="Ventas y reportes")
         EPPanelReportes(self.EPcontenedorVista)
+    def EPmostrarCalculadora(self):
+        self.EPlimpiarVista()
+        self.EPetiquetaTitulo.config(text="Calculadora de porcentajes")
+        EPPanelCalculadora(self.EPcontenedorVista)
     def EPcerrarSesion(self):
         from ventanas.panel_invitado import EPPanelInvitado
         for EPwidget in self.EPraiz.winfo_children():
@@ -818,6 +826,69 @@ class EPPanelReportes:
             messagebox.showinfo("Listo",f"Reporte guardado en:\n{EPruta}")
         except Exception as EPerror:
             messagebox.showerror("Error",f"No se pudo exportar el Excel: {EPerror}")
+
+class EPPanelCalculadora:
+    def __init__(self, EPcontenedor):
+        self.EPcontenedor =EPcontenedor
+        self.EPconstruirInterfaz()
+    def EPconstruirInterfaz(self):
+        EPtarjetaExplicacion =tk.Frame(self.EPcontenedor, bg=EPCOLOR_TARJETA, padx=20, pady=15)
+        EPtarjetaExplicacion.pack(fill="x", padx=20, pady=(15, 10))
+        tk.Label(EPtarjetaExplicacion, text="Comparador: sumar porcentajes vs aplicarlos sucesivamente",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 13, "bold")).pack(anchor="w")
+        tk.Label(
+            EPtarjetaExplicacion,
+            text="Cuando se combinan dos porcentajes (ej: descuento por cliente frecuente + promocion del dia),\n"
+                 "sumarlos directo (10% + 10% = 20%) NO da el mismo resultado que aplicar uno despues del otro.\n"
+                 "Este sistema usa siempre el metodo correcto (sucesivo) para calcular descuentos reales.",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 9), justify="left").pack(anchor="w", pady=(6, 0))
+        EPtarjetaEntradas =tk.Frame(self.EPcontenedor, bg=EPCOLOR_TARJETA, padx=20, pady=15)
+        EPtarjetaEntradas.pack(fill="x", padx=20, pady=(0, 10))
+        tk.Label(EPtarjetaEntradas, text="Valor inicial ($)", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 9)).grid(row=0, column=0, sticky="w")
+        self.EPentradaValor =tk.Entry(EPtarjetaEntradas, width=12)
+        self.EPentradaValor.grid(row=1, column=0, padx=(0, 20), pady=(2, 0), sticky="w")
+        self.EPentradaValor.insert(0, "100")
+        tk.Label(EPtarjetaEntradas, text="Porcentaje 1 (%)", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 9)).grid(row=0, column=1, sticky="w")
+        self.EPentradaPorcentaje1 =tk.Entry(EPtarjetaEntradas, width=12)
+        self.EPentradaPorcentaje1.grid(row=1, column=1, padx=(0, 20), pady=(2, 0), sticky="w")
+        self.EPentradaPorcentaje1.insert(0, "10")
+        tk.Label(EPtarjetaEntradas, text="Porcentaje 2 (%)", bg=EPCOLOR_TARJETA,
+            fg=EPCOLOR_TEXTO, font=("Arial", 9)).grid(row=0, column=2, sticky="w")
+        self.EPentradaPorcentaje2 =tk.Entry(EPtarjetaEntradas, width=12)
+        self.EPentradaPorcentaje2.grid(row=1, column=2, padx=(0, 20), pady=(2, 0), sticky="w")
+        self.EPentradaPorcentaje2.insert(0, "10")
+        EPBotonRedondeado(EPtarjetaEntradas, "Comparar", self.EPcomparar,
+            EPcolorFondo=EPCOLOR_BOTON_PRIMARIO, EPancho=150, EPalto=34).grid(row=1, column=3, padx=(10, 0), pady=(2, 0))
+        EPtarjetaResultado =tk.Frame(self.EPcontenedor, bg=EPCOLOR_TARJETA, padx=20, pady=20)
+        EPtarjetaResultado.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+        self.EPetiquetaSumado =tk.Label(EPtarjetaResultado, text="Sumando los porcentajes:  --",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_BOTON_PELIGRO, font=("Arial", 13))
+        self.EPetiquetaSumado.pack(anchor="w", pady=4)
+        self.EPetiquetaSucesivo =tk.Label(
+            EPtarjetaResultado, text="Aplicando sucesivamente (correcto):  --",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_BOTON_EXITO, font=("Arial", 13, "bold"))
+        self.EPetiquetaSucesivo.pack(anchor="w", pady=4)
+        self.EPetiquetaDiferencia =tk.Label(
+            EPtarjetaResultado, text="Diferencia:  --",
+            bg=EPCOLOR_TARJETA, fg=EPCOLOR_TEXTO, font=("Arial", 11))
+        self.EPetiquetaDiferencia.pack(anchor="w", pady=(10, 0))
+    def EPcomparar(self):
+        try:
+            EPvalor =float(self.EPentradaValor.get())
+            EPporcentaje1 =float(self.EPentradaPorcentaje1.get())
+            EPporcentaje2 =float(self.EPentradaPorcentaje2.get())
+        except ValueError:
+            messagebox.showwarning("Datos invalidos", "El valor inicial y los porcentajes deben ser numeros")
+            return
+        EPresultado =cp.EPcompararSumaVsSucesivo(EPvalor, EPporcentaje1, EPporcentaje2)
+        self.EPetiquetaSumado.config(
+            text=f"Sumando los porcentajes:  ${EPresultado['resultado_sumando_porcentajes']:.2f}")
+        self.EPetiquetaSucesivo.config(
+            text=f"Aplicando sucesivamente (correcto):  ${EPresultado['resultado_aplicacion_sucesiva']:.2f}")
+        self.EPetiquetaDiferencia.config(
+            text=f"Diferencia:  ${EPresultado['diferencia']:.2f}")
 
 def EPiniciarPanelAdmin():
     EPraiz =tk.Tk()
