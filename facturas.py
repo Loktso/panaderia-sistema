@@ -6,7 +6,11 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
-EPCARPETA_FACTURAS =os.path.join(os.path.dirname(os.path.abspath(__file__)), "facturas_generadas")
+if getattr(sys, "frozen", False):
+    EPDIRECTORIO_BASE = os.path.dirname(sys.executable)
+else:
+    EPDIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
+EPCARPETA_FACTURAS = os.path.join(EPDIRECTORIO_BASE, "facturas_generadas")
 
 def EPgenerarFacturaPDF(EPdatosFactura, EPitems):
     os.makedirs(EPCARPETA_FACTURAS, exist_ok=True)

@@ -34,9 +34,9 @@ def EPrevisarAlertasSobrante(EPfecha=None):
     EPumbral, EPdiasConsecutivos = EPobtenerUmbralYDias()
     EPalertas = []
     EPproductos = bd.EPobtenerProductos()
+    EPproduccionPorProducto = bd.EPobtenerProduccionUltimosDiasTodosProductos(EPdiasConsecutivos, EPfecha)
     for EPproducto in EPproductos:
-        EPhistorial = bd.EPobtenerProduccionPorProductoUltimosDias(
-            EPproducto["id_producto"], EPdiasConsecutivos, EPfecha)
+        EPhistorial = EPproduccionPorProducto.get(EPproducto["id_producto"], [])
         EPalerta = EPevaluarProducto(EPproducto, EPhistorial, EPumbral, EPdiasConsecutivos)
         if EPalerta:
             EPalertas.append(EPalerta)

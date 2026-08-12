@@ -1,0 +1,40 @@
+Esta carpeta es donde van TODAS las imagenes reales de la app.
+Mientras un archivo no exista, la vitrina dibuja un placeholder del mismo
+tamano automaticamente, asi que puedes ir agregando las fotos de a poco y
+todo se va actualizando solo (no hay que tocar nada de codigo).
+
+assets/logo.png
+    El logo de la panaderia. PNG con fondo transparente. Recomendado 200x200.
+
+assets/iconos/  (todos PNG, fondo transparente, cuadrados, mismo estilo entre si)
+    icono_catalogo.png       -> boton "ver catalogo"
+    icono_promociones.png    -> boton "promociones"
+    icono_carrito.png        -> boton "carrito"
+    icono_perfil.png         -> boton "cuenta / iniciar sesion" (esquina superior derecha)
+    Recomendado: 128x128 cada uno.
+
+assets/carrusel/  (JPG o PNG, mismo tamano y proporcion todas)
+    carrusel_1.jpg
+    carrusel_2.jpg
+    carrusel_3.jpg
+    carrusel_4.jpg
+    carrusel_5.jpg
+    carrusel_6.jpg
+    Recomendado: 1120x320 (o cualquier medida con esa misma proporcion ancha).
+    Aqui van fotos grandes y atractivas: pan recien horneado, vitrina de
+    pasteles, promocion del dia, etc.
+
+assets/productos/  (JPG o PNG, cuadradas, mismo tamano entre si)
+    El nombre del archivo tiene que coincidir con el nombre del producto en
+    minusculas, sin tildes, con guion bajo en vez de espacio. Ejemplos para
+    los productos de muestra que ya estan en el codigo:
+    pan_baguette.jpg
+    croissant.jpg
+    pastel_de_chocolate.jpg
+    galletas_de_avena.jpg
+    cupcake_de_vainilla.jpg
+    pan_integral.jpg
+    Cuando conectes la base de datos real, el nombre de archivo debe coincidir
+    igual con el nombre del producto en la tabla "productos" (columna nombre),
+    convertido con las mismas reglas (minusculas, sin tildes, espacios -> _).
+    Recomendado: 400x400 cada una.

@@ -317,19 +317,29 @@ def EPobtenerProduccionPorFecha(EPfecha):
     EPconexion.close()
     return EPresultado
 
-def EPobtenerProduccionPorProductoUltimosDias(EPidProducto, EPdias, EPfechaFin):
+def EPobtenerProduccionUltimosDiasTodosProductos(EPdias, EPfechaFin):
+    #trae el historial reciente de TODOS los productos en una sola consulta,
+    #en vez de una consulta separada por producto (eso era muy lento contra
+    #una base de datos remota, por el costo de abrir muchas conexiones)
     EPconexion = EPconectar()
     EPcursor = EPconexion.cursor(dictionary=True)
     EPquery = """
-        SELECT * FROM produccion_diaria
-        WHERE id_producto = %s AND fecha <= %s
-        ORDER BY fecha DESC
-        LIMIT %s"""
-    EPcursor.execute(EPquery, (EPidProducto, EPfechaFin, EPdias))
-    EPresultado = EPcursor.fetchall()
+        SELECT * FROM (
+            SELECT pd.*,
+                   ROW_NUMBER() OVER (PARTITION BY pd.id_producto ORDER BY pd.fecha DESC) AS EPranking
+            FROM produccion_diaria pd
+            WHERE pd.fecha <= %s
+        ) AS EPclasificada
+        WHERE EPranking <= %s
+        ORDER BY id_producto, fecha DESC"""
+    EPcursor.execute(EPquery, (EPfechaFin, EPdias))
+    EPfilas = EPcursor.fetchall()
     EPcursor.close()
     EPconexion.close()
-    return EPresultado
+    EPagrupado = {}
+    for EPfila in EPfilas:
+        EPagrupado.setdefault(EPfila["id_producto"], []).append(EPfila)
+    return EPagrupado
 
 def EPobtenerDisponibleHoy(EPidProducto, EPfecha):
     EPconexion = EPconectar()
